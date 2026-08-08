@@ -30,7 +30,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:dashes": "node scripts/check-dashes.mjs",
-    "prepublishOnly": "node scripts/guard-publish.mjs && npm run build"
+    "prepublishOnly": "node scripts/guard-publish.mjs"
   },
   "dependencies": {
     "yaml": "^2.4.5"

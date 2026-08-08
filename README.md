@@ -102,7 +102,8 @@ Do nothing today.
 
 Requires Node 20 or newer.
 
-shiftpoint is not on npm yet, so run it from a clone:
+shiftpoint is not on the npm registry and is not going there. It is distributed
+by clone, and the build refuses to publish.
 
 ```bash
 git clone https://github.com/MithrilBytes/shiftpoint.git
@@ -112,17 +113,25 @@ git clone https://github.com/MithrilBytes/shiftpoint.git
 cd shiftpoint && npm install && npm run build
 ```
 
+That gives you a working `dist/main.js`:
+
 ```bash
 node dist/main.js /path/to/your/repo
 ```
 
-Once it is published, that becomes `npx shiftpoint`. Every example below uses
-that shorter form.
+To get a `shiftpoint` command on your PATH without a registry:
+
+```bash
+npm link
+```
+
+Every example below assumes you ran that. Without it, read `shiftpoint` as
+`node dist/main.js`.
 
 ## Usage
 
 ```bash
-npx shiftpoint
+shiftpoint
 ```
 
 ```
@@ -147,15 +156,15 @@ does not contain.
 Point it somewhere else, write the verdict into the repository, or get JSON:
 
 ```bash
-npx shiftpoint ./some/repo
+shiftpoint ./some/repo
 ```
 
 ```bash
-npx shiftpoint --write
+shiftpoint --write
 ```
 
 ```bash
-npx shiftpoint --json
+shiftpoint --json
 ```
 
 ## Where the numbers come from
@@ -275,7 +284,7 @@ npm install
 npm test
 ```
 
-Four things the test suite enforces mechanically:
+Five things the test suite enforces mechanically:
 
 The goldens are the specification. `goldens/*.md` and their fixtures in
 `fixtures/` pin every verdict the tool can produce, and the CLI has to reproduce
@@ -292,6 +301,11 @@ and hand rolling a parser for them would be the worse trade.
 
 No em dashes or en dashes anywhere in the repository. Run `npm run check:dashes`
 to check. Use a comma, colon, period, or parentheses instead.
+
+This package is never published. `prepublishOnly` refuses unconditionally, there
+is no environment variable that gets past it, `private` is set, and the README is
+checked for install instructions that would never work. Publishing is the one
+action here that cannot be undone, so it is closed off rather than remembered.
 
 ## License
 

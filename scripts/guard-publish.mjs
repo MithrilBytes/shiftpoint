@@ -1,31 +1,33 @@
 #!/usr/bin/env node
-// Refuses to publish unless the intent is stated explicitly.
+// Refuses to publish. There is no flag, no environment variable, and no
+// argument that makes this script exit zero.
+//
+// shiftpoint is not going to the npm registry. It is distributed by clone, and
+// the decision is deliberate rather than a not-yet. This runs from
+// prepublishOnly, which fires on publish, so the refusal is observable.
 //
 // package.json also carries "private": true, which npm documents as refusing
-// publication. That guard is real but it is not observable from a machine that
-// is not logged in, because the authentication check runs first, and it is not
-// exercised by "npm publish --dry-run" at all. This script runs from
-// prepublishOnly, which does fire on publish, so the guard can be tested.
+// publication. Both guards are kept because they fail in different places and
+// neither alone is enough: the "private" check sits behind npm's own
+// authentication step, so on a machine that is not logged in it never runs, and
+// "npm publish --dry-run" does not exercise it at all.
 //
-// To publish deliberately:
-//   SHIFTPOINT_ALLOW_PUBLISH=1 npm publish
-// and remove "private": true from package.json, which npm requires separately.
+// If this project's mind is ever changed, the change belongs in a commit that
+// says so, not in an environment variable set at the moment of publishing.
 
-if (process.env.SHIFTPOINT_ALLOW_PUBLISH !== "1") {
-  console.error(
-    [
-      "Refusing to publish.",
-      "",
-      "shiftpoint is not ready for the registry yet. If you meant to do this:",
-      "",
-      "  1. remove \"private\": true from package.json",
-      "  2. run SHIFTPOINT_ALLOW_PUBLISH=1 npm publish",
-      "",
-      "Publishing is not reversible: a version number can never be reused,",
-      "and unpublishing is restricted after 72 hours.",
-    ].join("\n"),
-  );
-  process.exit(1);
-}
+console.error(
+  [
+    "Refusing to publish. shiftpoint does not go to the npm registry.",
+    "",
+    "This is not a not-yet. It is distributed by clone:",
+    "",
+    "  git clone https://github.com/MithrilBytes/shiftpoint.git",
+    "  cd shiftpoint && npm install && npm run build",
+    "  npm link          # optional, puts shiftpoint on your PATH",
+    "",
+    "Publishing cannot be undone: a version number can never be reused, and",
+    "unpublishing is restricted after 72 hours.",
+  ].join("\n"),
+);
 
-console.log("SHIFTPOINT_ALLOW_PUBLISH is set, continuing.");
+process.exit(1);

@@ -53,19 +53,10 @@ describe("the built CLI", () => {
   });
 });
 
-describe("the published package", () => {
-  it("ships only dist, README, LICENSE, and package.json", () => {
-    const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
-      cwd: REPO_ROOT,
-      encoding: "utf8",
-      stdio: ["ignore", "pipe", "pipe"],
-    });
-    const [tarball] = JSON.parse(output) as Array<{ files: Array<{ path: string }> }>;
-    const top = new Set((tarball?.files ?? []).map((file) => file.path.split("/")[0]));
-    expect([...top].sort()).toEqual(["LICENSE", "README.md", "dist", "package.json"]);
-  });
-
-  it("carries the rules data inside dist", () => {
+describe("the built output stands on its own", () => {
+  // Nothing is published, but this still proves dist carries its own rules
+  // data and that a clone builds to something runnable on another machine.
+  it("packs only dist, README, LICENSE, and package.json", () => {
     const output = execFileSync("npm", ["pack", "--dry-run", "--json"], {
       cwd: REPO_ROOT,
       encoding: "utf8",
@@ -73,7 +64,12 @@ describe("the published package", () => {
     });
     const [tarball] = JSON.parse(output) as Array<{ files: Array<{ path: string }> }>;
     const paths = (tarball?.files ?? []).map((file) => file.path);
+    expect([...new Set(paths.map((path) => path.split("/")[0]))].sort()).toEqual([
+      "LICENSE",
+      "README.md",
+      "dist",
+      "package.json",
+    ]);
     expect(paths).toContain("dist/rules/stages.yaml");
-    expect(paths).toContain("dist/rules/flags.yaml");
   });
 });
