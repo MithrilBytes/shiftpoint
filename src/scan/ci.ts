@@ -1,4 +1,4 @@
-import type { Repo } from "../repo.js";
+import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 
 const PROVIDERS: Array<{ pattern: RegExp; value: string; label: string }> = [

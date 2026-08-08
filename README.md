@@ -28,7 +28,7 @@ attention with nothing in the code to justify it.
 
 | Detector | Reads | Answers |
 | --- | --- | --- |
-| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, and source file extensions | Next.js, Express, Flask, Django, Rails, static, or unknown |
+| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, and source file extensions | Next.js, Nuxt, Astro, SvelteKit, Remix, Nest, Express, Fastify, Koa, Hono, Flask, Django, FastAPI, Rails, Sinatra, chi, Gin, Echo, Fiber, static, or unknown |
 | Shape | Notebooks, bin entries, console scripts, published entry points, source layout | Is this a service, a notebook, a library, a command line tool, a script, or a static site |
 | Serverless fit | Queue libraries, socket libraries, machine learning runtimes, local file databases | Can this run on a free function tier, and if not, exactly what stops it |
 | Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL` | Postgres, MySQL, SQLite, Mongo, or none |
@@ -113,7 +113,7 @@ cd shiftpoint && npm install && npm run build
 ```
 
 ```bash
-node dist/cli.js /path/to/your/repo
+node dist/main.js /path/to/your/repo
 ```
 
 Once it is published, that becomes `npx shiftpoint`. Every example below uses
@@ -187,19 +187,24 @@ inactivity.
 
 Four layers, kept separate because they change at different speeds.
 
-**Detectors** (`src/detectors/`) are small pure functions over the file tree.
+**Detectors** (`src/scan/`) are small pure functions over the file tree.
 Each emits typed signals with a confidence score and the evidence behind them.
 
-**Profile** (`src/profile.ts`) aggregates signals and derives the two answers
+**Profile** (`src/rules/profile.ts`) aggregates signals and derives the two answers
 the tool turns on: how heavy the static assets are, and whether the repository
 shows any demand at all.
 
-**Rules** (`rules/*.yaml`) map profiles to verdicts. Every capacity prior, price
-point, threshold, and sentence lives in these files. The engine holds no numbers
-of its own.
+**Rules** (`src/rules/` for the engine, `rules/*.yaml` for the data) map profiles
+to verdicts. Every capacity prior, price point, threshold, and sentence lives in
+the YAML. The engine holds no numbers of its own, and the build copies the data
+next to the engine that reads it.
 
 **Renderers** (`src/render/`) turn one shared verdict object into terminal
 output, INFRA.md, or JSON. Nothing renderer specific leaks upstream.
+
+`src/main.ts` is the entry point and does nothing but hand argv to `src/cli/`.
+Each directory under `src/` is one concern: `scan` reads the repository, `rules`
+decides, `render` writes, `cli` handles the terminal.
 
 ## Updating a price
 

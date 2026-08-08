@@ -1,5 +1,5 @@
 import { parse } from "yaml";
-import type { Repo } from "../repo.js";
+import type { Repo } from "./repo.js";
 
 /**
  * Shared readers for the dependency manifests several detectors need. Kept in

@@ -1,5 +1,5 @@
 import { dirname } from "node:path";
-import type { Repo } from "../repo.js";
+import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { FRAMEWORK_BY_DEPENDENCY } from "./framework.js";
 import { gemfiles, nodeManifests, pythonManifestFiles } from "./manifest.js";

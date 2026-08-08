@@ -2,7 +2,7 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyze } from "../src/analyze.js";
-import { detectApps } from "../src/detectors/apps.js";
+import { detectApps } from "../src/scan/apps.js";
 import { renderMarkdown } from "../src/render/markdown.js";
 import { FIXTURES_DIR, GOLDENS_DIR, withRepo } from "./helpers.js";
 

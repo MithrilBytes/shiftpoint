@@ -1,16 +1,16 @@
 import { describe, expect, it } from "vitest";
-import { detectAssets } from "../src/detectors/assets.js";
-import { detectCi } from "../src/detectors/ci.js";
-import { detectContainer } from "../src/detectors/container.js";
-import { detectDatabase } from "../src/detectors/database.js";
-import { detectFramework } from "../src/detectors/framework.js";
-import { runDetectors } from "../src/detectors/index.js";
-import { detectJobs } from "../src/detectors/jobs.js";
-import { detectOrchestration } from "../src/detectors/orchestration.js";
-import { detectApps } from "../src/detectors/apps.js";
-import { detectCommercial } from "../src/detectors/commercial.js";
-import { detectServerless } from "../src/detectors/serverless.js";
-import { detectShape } from "../src/detectors/shape.js";
+import { detectAssets } from "../src/scan/assets.js";
+import { detectCi } from "../src/scan/ci.js";
+import { detectContainer } from "../src/scan/container.js";
+import { detectDatabase } from "../src/scan/database.js";
+import { detectFramework } from "../src/scan/framework.js";
+import { runDetectors } from "../src/scan/index.js";
+import { detectJobs } from "../src/scan/jobs.js";
+import { detectOrchestration } from "../src/scan/orchestration.js";
+import { detectApps } from "../src/scan/apps.js";
+import { detectCommercial } from "../src/scan/commercial.js";
+import { detectServerless } from "../src/scan/serverless.js";
+import { detectShape } from "../src/scan/shape.js";
 import { values, withRepo } from "./helpers.js";
 
 describe("framework", () => {

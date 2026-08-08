@@ -6,7 +6,7 @@
   "private": true,
   "type": "module",
   "bin": {
-    "shiftpoint": "dist/cli.js"
+    "shiftpoint": "dist/main.js"
   },
   "files": [
     "dist"
@@ -26,7 +26,7 @@
     "url": "git+https://github.com/MithrilBytes/shiftpoint.git"
   },
   "scripts": {
-    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "build": "node scripts/clean-dist.mjs && tsc -p tsconfig.json && node scripts/postbuild.mjs",
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:dashes": "node scripts/check-dashes.mjs",

@@ -2,7 +2,7 @@ import { mkdirSync, mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
-import { loadRepo, type Repo } from "../src/repo.js";
+import { loadRepo, type Repo } from "../src/scan/repo.js";
 
 export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 export const FIXTURES_DIR = join(REPO_ROOT, "fixtures");

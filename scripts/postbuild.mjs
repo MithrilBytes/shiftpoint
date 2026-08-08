@@ -25,5 +25,5 @@ if (copied === 0) {
   process.exit(1);
 }
 
-chmodSync(join(process.cwd(), "dist", "cli.js"), 0o755);
+chmodSync(join(process.cwd(), "dist", "main.js"), 0o755);
 console.log(`Copied ${copied} rules file(s) into dist/rules.`);

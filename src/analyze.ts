@@ -1,8 +1,8 @@
-import { runDetectors } from "./detectors/index.js";
-import { evaluate } from "./engine/evaluate.js";
-import { loadRules } from "./engine/load.js";
-import { buildProfile } from "./profile.js";
-import { loadRepo } from "./repo.js";
+import { runDetectors } from "./scan/index.js";
+import { evaluate } from "./rules/evaluate.js";
+import { loadRules } from "./rules/load.js";
+import { buildProfile } from "./rules/profile.js";
+import { loadRepo } from "./scan/repo.js";
 import type { Profile, Verdict } from "./types.js";
 
 export interface Analysis {

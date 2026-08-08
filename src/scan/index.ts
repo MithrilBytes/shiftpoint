@@ -1,4 +1,4 @@
-import type { Repo } from "../repo.js";
+import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectApps } from "./apps.js";
 import { detectAssets } from "./assets.js";

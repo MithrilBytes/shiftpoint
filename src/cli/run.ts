@@ -1,9 +1,9 @@
 import { readFileSync, statSync, writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
-import { analyze } from "./analyze.js";
-import { renderJson } from "./render/json.js";
-import { renderMarkdown } from "./render/markdown.js";
-import { renderTerminal } from "./render/terminal.js";
+import { analyze } from "../analyze.js";
+import { renderJson } from "../render/json.js";
+import { renderMarkdown } from "../render/markdown.js";
+import { renderTerminal } from "../render/terminal.js";
 
 export interface Options {
   path: string;
@@ -63,7 +63,7 @@ export function parseArgs(argv: string[]): Options {
 }
 
 export function version(): string {
-  const text = readFileSync(new URL("../package.json", import.meta.url), "utf8");
+  const text = readFileSync(new URL("../../package.json", import.meta.url), "utf8");
   return (JSON.parse(text) as { version: string }).version;
 }
 

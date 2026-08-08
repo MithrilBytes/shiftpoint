@@ -2,9 +2,9 @@ import { mkdtempSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { evaluate, fill, matches } from "../src/engine/evaluate.js";
-import { loadRules, type RuleSet } from "../src/engine/load.js";
-import { buildProfile } from "../src/profile.js";
+import { evaluate, fill, matches } from "../src/rules/evaluate.js";
+import { loadRules, type RuleSet } from "../src/rules/load.js";
+import { buildProfile } from "../src/rules/profile.js";
 import type { Profile, Signal } from "../src/types.js";
 import { RULES_DIR } from "./helpers.js";
 

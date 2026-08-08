@@ -1,4 +1,4 @@
-import type { Confidence, Profile, Signal } from "./types.js";
+import type { Confidence, Profile, Signal } from "../types.js";
 
 export interface Thresholds {
   staticHeavyBytes: number;

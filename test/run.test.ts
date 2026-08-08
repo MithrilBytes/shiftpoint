@@ -2,7 +2,7 @@ import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
-import { parseArgs, run, version, type Streams } from "../src/run.js";
+import { parseArgs, run, version, type Streams } from "../src/cli/run.js";
 import { FIXTURES_DIR, GOLDENS_DIR } from "./helpers.js";
 
 function capture(argv: string[]): { code: number; out: string; err: string } {

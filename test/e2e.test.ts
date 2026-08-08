@@ -10,7 +10,7 @@ import { FIXTURES_DIR, GOLDENS_DIR, REPO_ROOT } from "./helpers.js";
  * actually ships: the built CLI, reading the rules copied into dist.
  */
 
-const CLI = join(REPO_ROOT, "dist", "cli.js");
+const CLI = join(REPO_ROOT, "dist", "main.js");
 
 const fixtures = readdirSync(FIXTURES_DIR, { withFileTypes: true })
   .filter((entry) => entry.isDirectory())

@@ -1,4 +1,4 @@
-import type { Repo } from "../repo.js";
+import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectFramework } from "./framework.js";
 import { declaredDependencies, manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
