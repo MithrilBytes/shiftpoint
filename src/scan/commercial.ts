@@ -2,7 +2,7 @@ import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { declaredDependencies } from "./manifest.js";
 
-const PROCESSOR_BY_DEPENDENCY = new Map<string, string>([
+export const PROCESSOR_BY_DEPENDENCY = new Map<string, string>([
   ["stripe", "stripe"],
   ["@stripe/stripe-js", "stripe"],
   ["paddle-sdk", "paddle"],

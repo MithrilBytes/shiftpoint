@@ -112,8 +112,15 @@ export function run(argv: string[], streams: Streams): number {
 
   if (options.write) {
     const target = join(root, "INFRA.md");
-    writeFileSync(target, renderMarkdown(verdict));
-    streams.out(`Wrote ${target}\n\n`);
+    try {
+      writeFileSync(target, renderMarkdown(verdict));
+    } catch (error) {
+      streams.err(`Could not write ${target}: ${(error as Error).message}\n`);
+      return 1;
+    }
+    // A status line, not output. Sending it to stdout corrupted --json for
+    // anything trying to parse the result.
+    streams.err(`Wrote ${target}\n`);
   }
 
   streams.out(options.json ? renderJson(verdict) : renderTerminal(verdict));

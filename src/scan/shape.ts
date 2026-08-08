@@ -96,12 +96,23 @@ function commandLineEntry(repo: Repo): string | undefined {
   return undefined;
 }
 
-/** Packaged for other people to import, so it is published rather than deployed. */
+/**
+ * Packaged for other people to import, so it is published rather than deployed.
+ *
+ * A "main" field on its own means nothing: "npm init -y" writes one into every
+ * package.json it creates. Calling that a library told the owner of a long
+ * running bot there was nothing to host. Something that is actually published
+ * says so in a second way, by declaring its exports, the files it ships, or how
+ * it should be published.
+ */
+const PUBLISHING_INTENT = ["exports", "files", "publishConfig", "types", "typings"];
+
 function publishedLibrary(repo: Repo): string | undefined {
   for (const [file, manifest] of nodeManifests(repo)) {
     if (manifest["private"] === true) continue;
-    if (manifest["main"] !== undefined || manifest["exports"] !== undefined) {
-      return `${file} declares an entry point for importers`;
+    const declared = PUBLISHING_INTENT.filter((key) => manifest[key] !== undefined);
+    if (declared.length > 0) {
+      return `${file} declares ${declared.join(" and ")} for importers`;
     }
   }
   for (const file of pythonManifestFiles(repo)) {

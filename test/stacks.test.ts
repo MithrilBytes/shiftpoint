@@ -114,3 +114,39 @@ describe("shiftpoint on itself", () => {
     expect(profile.fields["orchestration"]).toEqual(["none"]);
   });
 });
+
+describe("mistakes that quoted a price with confidence", () => {
+  // Each of these produced a wrong verdict until the day it was fixed.
+  it("does not call an npm init default a published library", () => {
+    // "npm init -y" writes main: index.js into every package.json it makes.
+    // Reading that as a library told a long running bot there was nothing to
+    // host, which is the opposite of what it needs.
+    withRepo(
+      {
+        "package.json": JSON.stringify({ name: "bot", version: "1.0.0", main: "index.js" }),
+        "index.js": "setInterval(() => {}, 1000);\n",
+      },
+      (_repo, root) => {
+        expect(analyze(root).verdict.stage).not.toContain("nothing to host here");
+      },
+    );
+  });
+
+  it("still calls a genuinely published package a library", () => {
+    withRepo(
+      {
+        "package.json": JSON.stringify({ name: "lib", version: "1.0.0", main: "index.js", exports: "./index.js" }),
+        "index.js": "module.exports = {};\n",
+      },
+      (_repo, root) => {
+        expect(analyze(root).verdict.stage).toContain("package other people install");
+      },
+    );
+  });
+
+  it("reads a manifest that starts with a byte order mark", () => {
+    withRepo({ "package.json": "\uFEFF" + JSON.stringify({ dependencies: { next: "^14" } }) }, (_repo, root) => {
+      expect(analyze(root).verdict.stage).toContain("$0/mo");
+    });
+  });
+});

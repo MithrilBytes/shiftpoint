@@ -54,7 +54,10 @@ export function nodeManifests(repo: Repo): Array<[string, Record<string, unknown
     if (text === undefined) continue;
     let parsed: unknown;
     try {
-      parsed = JSON.parse(text);
+      // A byte order mark is legal in a UTF-8 file and illegal in JSON, and
+      // editors on Windows still write them. Dropping it is the difference
+      // between reading a manifest and not seeing the project at all.
+      parsed = JSON.parse(text.replace(/^\uFEFF/, ""));
     } catch {
       continue;
     }
@@ -66,9 +69,32 @@ export function nodeManifests(repo: Repo): Array<[string, Record<string, unknown
 
 /** Dependency names from every package.json, runtime and development alike. */
 export function nodeDependencies(repo: Repo): Set<string> {
+  return nodeDependencyNames(repo, ["dependencies", "devDependencies", "peerDependencies"]);
+}
+
+/**
+ * Only what the application needs in production.
+ *
+ * The distinction matters wherever a dependency implies something about how the
+ * code runs. Playwright in devDependencies is a test runner; the same name in
+ * dependencies would be a browser the service drives at request time. Treating
+ * them alike told an ordinary Express app it was sized by a machine learning
+ * model.
+ */
+export function runtimeDependencies(repo: Repo): Set<string> {
+  const names = nodeDependencyNames(repo, ["dependencies"]);
+  // Python, Ruby, and Go manifests do not separate the two in a form this tool
+  // reads, so their names are runtime names as far as it can tell.
+  for (const name of pythonDependencies(repo)) names.add(name);
+  for (const name of rubyDependencies(repo)) names.add(name);
+  for (const name of goDependencies(repo)) names.add(name);
+  return names;
+}
+
+function nodeDependencyNames(repo: Repo, keys: string[]): Set<string> {
   const names = new Set<string>();
   for (const [, record] of nodeManifests(repo)) {
-    for (const key of ["dependencies", "devDependencies", "peerDependencies"]) {
+    for (const key of keys) {
       const block = record[key];
       if (typeof block !== "object" || block === null) continue;
       for (const name of Object.keys(block)) names.add(name.toLowerCase());

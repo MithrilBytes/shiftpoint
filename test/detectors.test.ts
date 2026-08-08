@@ -251,9 +251,17 @@ describe("shape", () => {
     });
   });
 
-  it("calls a published entry point a library", () => {
-    withRepo({ "package.json": JSON.stringify({ main: "index.js" }), "index.js": "" }, (repo) => {
+  it("calls a package that declares how it is published a library", () => {
+    withRepo({ "package.json": JSON.stringify({ main: "index.js", exports: "./index.js" }), "index.js": "" }, (repo) => {
       expect(values(detectShape(repo), "shape")).toEqual(["library"]);
+    });
+  });
+
+  it("does not call an npm init default a library", () => {
+    // main: index.js on its own is what "npm init -y" writes, so it is not
+    // evidence of anything.
+    withRepo({ "package.json": JSON.stringify({ main: "index.js" }), "index.js": "" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).not.toEqual(["library"]);
     });
   });
 

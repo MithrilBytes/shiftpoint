@@ -15,7 +15,7 @@ const ENV_EXAMPLE = /(^|\/)\.env(\.example|\.sample|\.template)?$/;
 const PYTHON_SOURCE = /\.py$/;
 
 // Maps every name this detector understands onto the engine's vocabulary.
-const ENGINE_BY_ALIAS = new Map<string, string>([
+export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["postgresql", "postgres"],
   ["postgres", "postgres"],
   ["pg", "postgres"],

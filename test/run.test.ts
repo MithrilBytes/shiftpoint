@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
+import { chmodSync, cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -63,7 +63,7 @@ describe("run", () => {
       cpSync(join(FIXTURES_DIR, "k8s-overkill"), root, { recursive: true });
       const result = capture([root, "--write"]);
       expect(result.code).toBe(0);
-      expect(result.out).toContain(`Wrote ${join(root, "INFRA.md")}`);
+      expect(result.err).toContain(`Wrote ${join(root, "INFRA.md")}`);
       expect(readFileSync(join(root, "INFRA.md"), "utf8")).toBe(
         readFileSync(join(GOLDENS_DIR, "k8s-overkill.md"), "utf8"),
       );
@@ -121,6 +121,36 @@ describe("run", () => {
         "confidence", "confidenceNote", "doNothingToday",
       ]);
       expect(typeof parsed["stage"], fixture.name).toBe("string");
+    }
+  });
+
+  it("keeps stdout parseable when writing and printing JSON together", () => {
+    const root = mkdtempSync(join(tmpdir(), "shiftpoint-jw-"));
+    try {
+      cpSync(join(FIXTURES_DIR, "static-site"), root, { recursive: true });
+      const result = capture([root, "--json", "--write"]);
+      expect(result.code).toBe(0);
+      // The "Wrote ..." notice is status, not output. On stdout it made --json
+      // unparseable for anything downstream.
+      expect(() => JSON.parse(result.out)).not.toThrow();
+      expect(result.err).toContain("Wrote ");
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("reports a plain message when INFRA.md cannot be written", () => {
+    const root = mkdtempSync(join(tmpdir(), "shiftpoint-ro-"));
+    try {
+      cpSync(join(FIXTURES_DIR, "static-site"), root, { recursive: true });
+      chmodSync(root, 0o555);
+      const result = capture([root, "--write"]);
+      expect(result.code).toBe(1);
+      expect(result.err).toContain("Could not write");
+      expect(result.err).not.toContain("at Object.");
+    } finally {
+      chmodSync(root, 0o755);
+      rmSync(root, { recursive: true, force: true });
     }
   });
 });

@@ -2,10 +2,10 @@ import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectDatabase } from "./database.js";
 import { detectJobs } from "./jobs.js";
-import { declaredDependencies } from "./manifest.js";
+import { declaredDependencies, runtimeDependencies } from "./manifest.js";
 
 // Dependencies that need a process that outlives a request.
-const PERSISTENT_CONNECTION = new Set([
+export const PERSISTENT_CONNECTION = new Set([
   "socket.io",
   "ws",
   "uwebsockets.js",
@@ -18,7 +18,7 @@ const PERSISTENT_CONNECTION = new Set([
 ]);
 
 // Dependencies too large or too slow to start inside a free function tier.
-const HEAVY_RUNTIME = new Set([
+export const HEAVY_RUNTIME = new Set([
   "torch",
   "pytorch",
   "tensorflow",
@@ -54,7 +54,9 @@ export function detectServerless(repo: Repo): Signal[] {
     kinds.push("background_work");
   }
 
-  const dependencies = declaredDependencies(repo);
+  // Judged on production dependencies only. A test runner or a build tool does
+  // not run when a request arrives, so it cannot be what stops this fitting.
+  const dependencies = runtimeDependencies(repo);
 
   const held = [...dependencies].filter((name) => PERSISTENT_CONNECTION.has(name)).sort();
   if (held.length > 0) {

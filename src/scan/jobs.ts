@@ -3,7 +3,7 @@ import type { Signal } from "../types.js";
 import { manifestFiles, nodeDependencies, pythonDependencies, rubyDependencies } from "./manifest.js";
 
 // Queue libraries this tool recognizes, mapped onto the engine's vocabulary.
-const QUEUE_BY_DEPENDENCY = new Map<string, string>([
+export const QUEUE_BY_DEPENDENCY = new Map<string, string>([
   ["sidekiq", "sidekiq"],
   ["resque", "resque"],
   ["delayed_job", "delayed_job"],
