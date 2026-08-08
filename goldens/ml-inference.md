@@ -12,6 +12,4 @@ What this repository needs today, based only on the files in it.
 
 Confidence: medium. Some of this is inferred from what the repository does not contain.
 
-Do nothing today.
-
 Written by shiftpoint. Run `shiftpoint --write` to update.

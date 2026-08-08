@@ -40,8 +40,11 @@ export function evaluate(profile: Profile, rules: RuleSet): Verdict {
     flags,
     confidence,
     confidenceNote: [rules.notes[confidence], ...caveats].join(" "),
-    // Flags are things to remove. With none of them, there is nothing to do.
-    doNothingToday: flags.length === 0,
+    // Flags are things to remove, so with none of them there is nothing to
+    // remove. The rule still has to be one that reached an answer: a verdict
+    // that could not identify the repository is in no position to affirm that
+    // nothing needs changing.
+    doNothingToday: flags.length === 0 && stage.doNothing,
   };
 }
 

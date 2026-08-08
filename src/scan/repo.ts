@@ -9,6 +9,10 @@ import { join, relative, sep } from "node:path";
 export interface Repo {
   root: string;
   files: readonly string[];
+  /** True when the file cap was hit, so part of the tree was never seen. */
+  truncated: boolean;
+  /** Paths a read was refused for size, and which therefore read as absent. */
+  unreadable(): readonly string[];
   has(path: string): boolean;
   read(path: string): string | undefined;
   bytes(path: string): number;
@@ -57,8 +61,10 @@ const SKIP_DIRECTORIES = new Set([
 // Virtual environments are routinely named env/ or .env39/ rather than venv/.
 const VENDORED_MARKERS = ["pyvenv.cfg", "site-packages"];
 
-// Engineering guards, not capacity priors. These keep a pathological
-// repository from stalling the run; they never influence a verdict.
+// Engineering guards that keep a pathological repository from stalling the
+// run. They do influence a verdict: a file that is never walked, or never read,
+// reads exactly like a file that is not there. Both are therefore reported, so
+// the verdict can say what it did not see rather than quietly guessing.
 const MAX_READ_BYTES = 1_000_000;
 const MAX_FILES = 20_000;
 
@@ -68,16 +74,20 @@ export function loadRepo(root: string): Repo {
 
   const files = [...sizes.keys()].sort();
   const cache = new Map<string, string | undefined>();
+  const refused: string[] = [];
 
   return {
     root,
     files,
+    truncated: sizes.size >= MAX_FILES,
+    unreadable: () => refused,
     has: (path) => sizes.has(path),
     bytes: (path) => sizes.get(path) ?? 0,
     read(path) {
       if (cache.has(path)) return cache.get(path);
       let text: string | undefined;
       const size = sizes.get(path);
+      if (size !== undefined && size > MAX_READ_BYTES) refused.push(path);
       if (size !== undefined && size <= MAX_READ_BYTES) {
         try {
           text = readFileSync(join(root, path), "utf8");

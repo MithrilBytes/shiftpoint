@@ -116,3 +116,24 @@ describe("the same repository always gets the same answer", () => {
     );
   });
 });
+
+describe("the scan says what it did not see", () => {
+  it("reports a file too large to read, rather than treating it as absent", () => {
+    // A file that is never read looks exactly like a file that is not there,
+    // and every other detector reports absence as evidence. Without this the
+    // tool would present its own blind spot as a finding about the code.
+    const root = repoWith({});
+    writeFileSync(join(root, "requirements.txt"), "flask==3.0.3\n" + "#".repeat(1_200_000));
+
+    const { verdict, profile } = analyze(root);
+    expect(profile.fields["scan"]).toEqual(["partial"]);
+    expect(verdict.confidenceNote).toContain("never looked at");
+  });
+
+  it("says the scan was complete for an ordinary repository", () => {
+    const root = repoWith({ "package.json": '{"dependencies":{"next":"^14"}}' });
+    const { verdict, profile } = analyze(root);
+    expect(profile.fields["scan"]).toEqual(["complete"]);
+    expect(verdict.confidenceNote).not.toContain("never looked at");
+  });
+});

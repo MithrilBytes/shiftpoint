@@ -52,6 +52,9 @@ stages:
     when:
       blocked_by: [heavy_runtime]
     confidence: medium
+    # This verdict asks for work: price the model against its hardware. Saying
+    # "Do nothing today." underneath that would contradict it.
+    do_nothing: false
     stage: "This is sized by the model it loads, not by how many people visit, so we will not put a price on it"
     headroom: "Machine learning runtimes need memory and often a GPU, and the cheapest servers cannot load them at all. What you need depends on the model, not on your traffic."
     tripwire: "If you put a web endpoint in front of this, the endpoint and the model are two separate bills. Price the model against the hardware it needs, then run this again on the endpoint alone."
@@ -207,6 +210,9 @@ stages:
     when:
       language: [node, python, ruby, go]
     confidence: low
+    # An abstention. The tool understood nothing here, so it is in no position
+    # to affirm that nothing needs changing.
+    do_nothing: false
     stage: "We could not tell whether this is something you host, so we cannot price it"
     headroom: "No headroom estimate. There was not enough in this repository to base one on."
     tripwire: "If this is meant to run somewhere, add the framework or entry point it runs under and try again. Most projects this size start free."
@@ -214,6 +220,8 @@ stages:
   - id: unknown
     when: {}
     confidence: low
+    # As above: no idea what this is, so no opinion on whether to act.
+    do_nothing: false
     stage: "We could not tell what this repository runs, so we cannot price it"
     headroom: "No headroom estimate. There was not enough in this repository to base one on."
     tripwire: "Add a dependency file (package.json, requirements.txt, Gemfile, go.mod) and run this again."

@@ -17,3 +17,8 @@ caveats:
     when:
       apps: [several]
     text: "This repository holds more than one deployable application, and the answer above treats them as a single system. Run this again inside each one for a closer answer."
+
+  - id: scan-was-partial
+    when:
+      scan: [partial]
+    text: "This repository was too large to read in full, so parts of it were never looked at. Anything in the parts that were skipped is missing from the answer above."

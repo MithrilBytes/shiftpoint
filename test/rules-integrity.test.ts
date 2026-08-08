@@ -39,6 +39,7 @@ const VOCABULARY: Record<string, string[]> = {
   assets: ["light", "heavy"],
   demand: ["none", "present"],
   ci: ["github-actions", "gitlab-ci", "circleci", "jenkins", "none"],
+  scan: ["complete", "partial"],
 };
 
 const everyWhen = [
@@ -194,5 +195,30 @@ describe("every stage rule, priced", () => {
         expect(dollars, `stage "${rule.id}" quotes $${dollars}`).toBeLessThanOrEqual(500);
       }
     }
+  });
+});
+
+describe("the closing sentence means something", () => {
+  it("never affirms no action from a verdict that identified nothing", () => {
+    // "Do nothing today." is this tool's signature line. Printing it under
+    // "we could not tell what this repository runs" pairs an admission of
+    // ignorance with confident approval of whatever is in there.
+    for (const id of ["known-language-only", "unknown", "model-runtime"]) {
+      const rule = rules.stages.find((candidate) => candidate.id === id);
+      expect(rule?.doNothing, id).toBe(false);
+    }
+  });
+
+  it("still allows it where the tool reached an answer", () => {
+    for (const id of ["notebook", "library", "command-line-tool", "static-site"]) {
+      const rule = rules.stages.find((candidate) => candidate.id === id);
+      expect(rule?.doNothing, id).toBe(true);
+    }
+  });
+
+  it("does not print it for a repository it could not identify", () => {
+    const verdict = evaluate({ fields: { shape: ["unknown"] }, confidence: {}, evidence: {} }, rules);
+    expect(verdict.flags).toEqual([]);
+    expect(verdict.doNothingToday).toBe(false);
   });
 });

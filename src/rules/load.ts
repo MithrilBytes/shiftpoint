@@ -8,6 +8,8 @@ export interface StageRule {
   id: string;
   when: Record<string, string[]>;
   confidence: Confidence;
+  /** Whether this verdict is allowed to close with "Do nothing today." */
+  doNothing: boolean;
   stage: string;
   headroom: string;
   tripwire: string;
@@ -72,6 +74,7 @@ export function loadRules(dir: string = resolveRulesDir()): RuleSet {
       id,
       when: readWhen(raw, `${stagesFile}: stage "${id}"`),
       confidence: readConfidence(raw, `${stagesFile}: stage "${id}"`),
+      doNothing: readDoNothing(raw, `${stagesFile}: stage "${id}"`),
       stage: requireString(raw, "stage", `${stagesFile}: stage "${id}"`),
       headroom: requireString(raw, "headroom", `${stagesFile}: stage "${id}"`),
       tripwire: requireString(raw, "tripwire", `${stagesFile}: stage "${id}"`),
@@ -179,6 +182,20 @@ function readConfidence(raw: Record<string, unknown>, where: string): Confidence
     throw new Error(`${where} needs a "confidence" of high, medium, or low.`);
   }
   return value as Confidence;
+}
+
+/**
+ * Whether a rule may close with "Do nothing today.". Defaults to true, because
+ * most verdicts are an answer. A rule that abstains, or that asks the reader to
+ * go and find something out, sets it false rather than contradicting itself.
+ */
+function readDoNothing(raw: Record<string, unknown>, where: string): boolean {
+  const value = raw["do_nothing"];
+  if (value === undefined) return true;
+  if (typeof value !== "boolean") {
+    throw new Error(`${where} has a "do_nothing" that is not true or false.`);
+  }
+  return value;
 }
 
 /** A `when` block: every key must match, any listed value satisfies its key. */
