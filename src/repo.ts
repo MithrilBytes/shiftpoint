@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readdirSync, readFileSync, statSync } from "node:fs";
 import { join, relative, sep } from "node:path";
 
 /**
@@ -83,6 +83,11 @@ function walk(root: string, dir: string, sizes: Map<string, number>): void {
 
     if (entry.isDirectory()) {
       if (SKIP_DIRECTORIES.has(entry.name)) continue;
+      // A subdirectory with its own .git is a separate checkout: a submodule,
+      // a git worktree, or a vendored clone. Its files belong to that
+      // repository, not this one, and counting them makes one application
+      // look like several.
+      if (existsSync(join(full, ".git"))) continue;
       walk(root, full, sizes);
       continue;
     }

@@ -7,7 +7,8 @@ import { detectFramework } from "../src/detectors/framework.js";
 import { runDetectors } from "../src/detectors/index.js";
 import { detectJobs } from "../src/detectors/jobs.js";
 import { detectOrchestration } from "../src/detectors/orchestration.js";
-import { detectPayments } from "../src/detectors/payments.js";
+import { detectApps } from "../src/detectors/apps.js";
+import { detectCommercial } from "../src/detectors/commercial.js";
 import { detectServerless } from "../src/detectors/serverless.js";
 import { detectShape } from "../src/detectors/shape.js";
 import { values, withRepo } from "./helpers.js";
@@ -269,17 +270,55 @@ describe("serverless fit", () => {
   });
 });
 
-describe("payments", () => {
-  it("finds a payment processor, which decides free tier eligibility", () => {
+describe("commercial", () => {
+  it("treats a payment processor as commercial", () => {
     withRepo({ "package.json": JSON.stringify({ dependencies: { stripe: "^15" } }) }, (repo) => {
-      expect(values(detectPayments(repo), "payments")).toEqual(["stripe"]);
+      expect(values(detectCommercial(repo), "commercial")).toEqual(["yes"]);
     });
   });
 
-  it("reports no processor as none", () => {
-    withRepo({ "package.json": JSON.stringify({ dependencies: { next: "^14" } }) }, (repo) => {
-      expect(values(detectPayments(repo), "payments")).toEqual(["none"]);
+  it("treats a pricing route as commercial even with no payment code", () => {
+    withRepo({ "package.json": "{}", "app/pricing/page.tsx": "export default () => null;" }, (repo) => {
+      expect(values(detectCommercial(repo), "commercial")).toEqual(["yes"]);
     });
+  });
+
+  it("says unclear rather than no, because absence proves nothing", () => {
+    // A business can invoice outside the product and ship no payment code.
+    withRepo({ "package.json": JSON.stringify({ dependencies: { next: "^14" } }) }, (repo) => {
+      const signal = detectCommercial(repo)[0];
+      expect(signal?.values).toEqual(["unclear"]);
+      expect(signal?.confidence).toBe("low");
+    });
+  });
+});
+
+describe("apps", () => {
+  it("counts one root per manifest that declares a framework", () => {
+    withRepo(
+      {
+        "package.json": JSON.stringify({ workspaces: ["apps/*"] }),
+        "apps/web/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "apps/api/package.json": JSON.stringify({ dependencies: { express: "^4" } }),
+      },
+      (repo) => {
+        const signal = detectApps(repo)[0];
+        expect(signal?.values).toEqual(["several"]);
+        expect(signal?.metric).toBe(2);
+      },
+    );
+  });
+
+  it("does not count a shared package as a deployable app", () => {
+    withRepo(
+      {
+        "apps/web/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "packages/shared/package.json": JSON.stringify({ main: "index.js" }),
+      },
+      (repo) => {
+        expect(detectApps(repo)[0]?.metric).toBe(1);
+      },
+    );
   });
 });
 

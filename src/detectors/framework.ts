@@ -14,6 +14,19 @@ import {
 const INDEX_HTML = /(^|\/)index\.html$/;
 
 /**
+ * Dependency name to framework, shared with the detector that counts how many
+ * deployable applications a repository holds so both answer "is this a web
+ * application" the same way.
+ */
+export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
+  ["next", "nextjs"],
+  ["express", "express"],
+  ["flask", "flask"],
+  ["django", "django"],
+  ["rails", "rails"],
+]);
+
+/**
  * Language and framework. Both come from dependency manifests, which are the
  * only place a project states what it runs on rather than what it happens to
  * contain.
@@ -60,31 +73,21 @@ export function detectFramework(repo: Repo): Signal[] {
   const frameworks: string[] = [];
   const frameworkEvidence: string[] = [];
 
-  const node = nodeDependencies(repo);
-  if (node.has("next")) {
-    frameworks.push("nextjs");
-    frameworkEvidence.push("package.json depends on next");
-  }
-  if (node.has("express")) {
-    frameworks.push("express");
-    frameworkEvidence.push("package.json depends on express");
-  }
+  const sources: Array<[Set<string>, string]> = [
+    [nodeDependencies(repo), "package.json depends on"],
+    [pythonDependencies(repo), "a python manifest requires"],
+    [rubyDependencies(repo), "Gemfile requires"],
+  ];
 
-  const python = pythonDependencies(repo);
-  if (python.has("flask")) {
-    frameworks.push("flask");
-    frameworkEvidence.push("a python manifest requires flask");
+  for (const [names, phrase] of sources) {
+    for (const name of names) {
+      const framework = FRAMEWORK_BY_DEPENDENCY.get(name);
+      if (framework === undefined || frameworks.includes(framework)) continue;
+      frameworks.push(framework);
+      frameworkEvidence.push(`${phrase} ${name}`);
+    }
   }
-  if (python.has("django")) {
-    frameworks.push("django");
-    frameworkEvidence.push("a python manifest requires django");
-  }
-
-  const ruby = rubyDependencies(repo);
-  if (ruby.has("rails")) {
-    frameworks.push("rails");
-    frameworkEvidence.push("Gemfile requires rails");
-  }
+  frameworks.sort();
 
   // No manifest of any kind plus checked in HTML is a static site. That is a
   // positive finding, not a fallback: both halves are evidence.

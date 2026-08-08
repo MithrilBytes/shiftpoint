@@ -1,0 +1,9 @@
+{
+  "name": "@acme/api",
+  "private": true,
+  "scripts": { "start": "node src/server.js" },
+  "dependencies": {
+    "express": "^4.19.2",
+    "@acme/shared": "*"
+  }
+}

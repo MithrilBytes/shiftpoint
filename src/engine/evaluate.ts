@@ -25,6 +25,13 @@ export function evaluate(profile: Profile, rules: RuleSet): Verdict {
   );
   const confidence = lowestConfidence([stage.confidence, ...matched]);
 
+  // Caveats say the answer fits less well, which is a different thing from the
+  // evidence being thin, so they ride alongside the confidence rather than
+  // lowering it.
+  const caveats = rules.caveats
+    .filter((rule) => matches(rule.when, profile.fields))
+    .map((rule) => rule.text);
+
   const where = `rules/stages.yaml: stage "${stage.id}"`;
   return {
     stage: fill(stage.stage, stage.scalars, where),
@@ -32,7 +39,7 @@ export function evaluate(profile: Profile, rules: RuleSet): Verdict {
     tripwire: fill(stage.tripwire, stage.scalars, where),
     flags,
     confidence,
-    confidenceNote: rules.notes[confidence],
+    confidenceNote: [rules.notes[confidence], ...caveats].join(" "),
     // Flags are things to remove. With none of them, there is nothing to do.
     doNothingToday: flags.length === 0,
   };

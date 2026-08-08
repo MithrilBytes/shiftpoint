@@ -21,11 +21,18 @@ export interface FlagRule {
   scalars: Record<string, string>;
 }
 
+export interface CaveatRule {
+  id: string;
+  when: Record<string, string[]>;
+  text: string;
+}
+
 export interface RuleSet {
   stages: StageRule[];
   flags: FlagRule[];
   thresholds: { staticHeavyBytes: number };
   notes: Record<Confidence, string>;
+  caveats: CaveatRule[];
 }
 
 const CONFIDENCE_LEVELS: Confidence[] = ["high", "medium", "low"];
@@ -103,7 +110,19 @@ export function loadRules(dir: string = resolveRulesDir()): RuleSet {
     notes[level] = note;
   }
 
-  return { stages, flags, thresholds: { staticHeavyBytes }, notes };
+  const caveats = (confidenceDoc["caveats"] === undefined
+    ? []
+    : list(confidenceDoc, "caveats", confidenceFile)
+  ).map((raw, index) => {
+    const id = requireString(raw, "id", `${confidenceFile}: caveat ${index + 1}`);
+    return {
+      id,
+      when: readWhen(raw, `${confidenceFile}: caveat "${id}"`),
+      text: requireString(raw, "text", `${confidenceFile}: caveat "${id}"`),
+    };
+  });
+
+  return { stages, flags, thresholds: { staticHeavyBytes }, notes, caveats };
 }
 
 function readYaml(dir: string, file: string): Record<string, unknown> {

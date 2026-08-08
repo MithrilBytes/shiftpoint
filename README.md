@@ -32,7 +32,8 @@ attention with nothing in the code to justify it.
 | Shape | Notebooks, bin entries, console scripts, published entry points, source layout | Is this a service, a notebook, a library, a command line tool, a script, or a static site |
 | Serverless fit | Queue libraries, socket libraries, machine learning runtimes, local file databases | Can this run on a free function tier, and if not, exactly what stops it |
 | Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL` | Postgres, MySQL, SQLite, Mongo, or none |
-| Payments | Stripe, Paddle, Lemon Squeezy, Braintree, PayPal in any manifest | Whether the free plans are licensed for what you are doing |
+| Commercial | Payment processors, business tooling, pricing and checkout routes | Whether the free plans are licensed for what you are doing |
+| Applications | Manifests that declare a web framework, per directory | How many separately deployable apps live here |
 | Container | `Dockerfile`, `docker-compose.yml` | How it is packaged, and how many services it is really made of |
 | Orchestration | Kubernetes manifests by shape, Helm charts, Terraform | What deployment machinery is checked in |
 | Background jobs | Sidekiq, Resque, Celery, RQ, Dramatiq, BullMQ, and others | Whether work happens outside the request cycle |
@@ -54,9 +55,9 @@ Sixteen verdicts, matched most specific first. Everything below comes from
 | Sized by a machine learning model it loads | Deliberately not priced, because the cheapest servers cannot load it at all |
 | A static site | Free static hosting, $0 |
 | A script with nothing that must stay running | A free function tier, $0 |
-| A stateless service, no payments | A free managed tier, $0 |
+| A stateless service with no sign of a business | A free managed tier, $0 |
 | A stateless service with a database | A free managed tier including the database, $0 |
-| A stateless service that takes payments | About $20/mo, because the free plans are non commercial |
+| A stateless service that looks like a business | About $20/mo, because the free plans are non commercial |
 | A service with a single file database | One small always on server, $4 to $9/mo |
 | A service with a managed database | A small server plus a managed database, $19 to $25/mo |
 | A service with background work | An app server, a worker, and a database, $25 to $40/mo |
@@ -86,7 +87,9 @@ the next step costs.
 **Flags.** Spending and complexity the repository shows no demand for.
 
 Under those four is a confidence level. When confidence is low, it says so
-plainly rather than inventing a number.
+plainly rather than inventing a number. The same line carries caveats: things
+that make the answer fit less well, such as a repository holding several
+deployable applications when a verdict describes one system.
 
 When there is nothing worth changing, the verdict ends with the whole point of
 the tool:
@@ -114,9 +117,10 @@ Stage:    A free managed tier covers this (est. $0/mo)
 Headroom: Cloudflare Workers allows 100,000 requests a day free, and
           Vercel's free plan allows 100 GB of traffic a month, either
           of which is a long way off for a new app
-Tripwire: If you start taking payments, the free plans are personal
-          use only and you move to about $20/mo. If you outgrow the
-          request limits first, the next step is about $5/mo.
+Tripwire: Those free plans are licensed for personal, non commercial
+          use, so the day this becomes a business it is about $20/mo
+          whatever the traffic is doing. If you outgrow the request
+          limits first, the next step is about $5/mo.
 Flags:    Found Kubernetes manifests. The cluster alone is about
           $73/mo before a single server to run on, with no signal you
           need it yet.
@@ -210,7 +214,7 @@ Ordered roughly by how much each one would improve an answer today.
 - [ ] Bun and Deno as runtimes, including their own deploy targets
 - [ ] Edge databases: Turso, Cloudflare D1, Supabase, PlanetScale
 - [ ] Scheduled work as its own shape, since cron fits free tiers that long running work does not
-- [ ] Monorepos, which today collapse to a single verdict for what may be several deployable apps
+- [ ] Per application verdicts in a monorepo. Several apps are now detected and said out loud, but the answer still covers them as one system
 
 **Making the verdicts sharper**
 
@@ -223,8 +227,8 @@ Ordered roughly by how much each one would improve an answer today.
 **Correctness work**
 
 - [ ] Test on Windows. Paths are normalised for it but nothing has run there
-- [ ] Handle vendored dependency directories with non standard names, which can swamp the file scan
-- [ ] Distinguish a hobby project from a business, since the same code gets different advice
+- [ ] Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content
+- [ ] Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it
 
 Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
 kind, hosting provider integrations, config files, and a plugin system.

@@ -2,8 +2,9 @@ import { readdirSync, readFileSync } from "node:fs";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
 import { analyze } from "../src/analyze.js";
+import { detectApps } from "../src/detectors/apps.js";
 import { renderMarkdown } from "../src/render/markdown.js";
-import { FIXTURES_DIR, GOLDENS_DIR } from "./helpers.js";
+import { FIXTURES_DIR, GOLDENS_DIR, withRepo } from "./helpers.js";
 
 /**
  * The goldens are the specification. They were written by hand before any
@@ -21,6 +22,7 @@ describe("goldens", () => {
       "jupyter-notebook",
       "k8s-overkill",
       "ml-inference",
+      "monorepo",
       "nextjs-crud",
       "python-script",
       "rails-sidekiq",
@@ -72,7 +74,7 @@ describe("the free tier comes first", () => {
 
   it("charges for a commercial app because the free plan does not license it", () => {
     const { verdict, profile } = analyze(join(FIXTURES_DIR, "nextjs-crud"));
-    expect(profile.fields["payments"]).toEqual(["stripe"]);
+    expect(profile.fields["commercial"]).toEqual(["yes"]);
     expect(verdict.stage).toContain("$20/mo");
     expect(verdict.tripwire).toContain("non commercial");
   });
@@ -82,6 +84,27 @@ describe("the free tier comes first", () => {
     expect(profile.fields["blocked_by"]).toContain("heavy_runtime");
     expect(verdict.stage).toContain("sized by the model");
     expect(verdict.stage).not.toMatch(/\$/);
+  });
+
+  it("says so when one verdict is covering several applications", () => {
+    const { verdict, profile } = analyze(join(FIXTURES_DIR, "monorepo"));
+    expect(profile.fields["apps"]).toEqual(["several"]);
+    expect(verdict.confidenceNote).toContain("more than one deployable application");
+  });
+
+  it("does not treat a nested checkout as a second application", () => {
+    // A git worktree or submodule carries a full copy of a repository. Walking
+    // into one makes a single app look like a monorepo.
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        ".claude/worktrees/copy/.git": "gitdir: /elsewhere/.git/worktrees/copy",
+        ".claude/worktrees/copy/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+      },
+      (repo) => {
+        expect(detectApps(repo)[0]?.metric).toBe(1);
+      },
+    );
   });
 
   it("sends work that needs a live process to a real server", () => {

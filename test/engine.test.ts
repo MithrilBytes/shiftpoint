@@ -56,13 +56,13 @@ describe("evaluate", () => {
   });
 
   it("never reports more confidence than the signals it leaned on", () => {
-    const fields = { shape: ["service"], serverless_fit: ["fits"], payments: ["stripe"] };
+    const fields = { shape: ["service"], serverless_fit: ["fits"], commercial: ["yes"] };
     const strong = evaluate(
-      profileOf(fields, { shape: "high", serverless_fit: "high", payments: "high" }),
+      profileOf(fields, { shape: "high", serverless_fit: "high", commercial: "high" }),
       rules,
     );
     const weak = evaluate(
-      profileOf(fields, { shape: "high", serverless_fit: "low", payments: "high" }),
+      profileOf(fields, { shape: "high", serverless_fit: "low", commercial: "high" }),
       rules,
     );
     expect(strong.confidence).toBe("high");

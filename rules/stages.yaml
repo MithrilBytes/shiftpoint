@@ -108,19 +108,20 @@ stages:
     headroom: "AWS Lambda gives {free_requests} requests a month free and does not expire, which is more than a script like this is likely to use"
     tripwire: "If this needs to answer faster than a cold start allows, or run longer than a few minutes at a time, you need a small always on server instead. That starts at about $4/mo. Past the free requests, cost rises by roughly ${next_tier_cost} per additional million."
 
-  # A payment processor means the free tier this would otherwise sit on is not
-  # licensed for it. That is a price change, so it belongs in the stage.
+  # Evidence of a commercial project means the free tier this would otherwise
+  # sit on is not licensed for it. That is a price change, so it belongs in the
+  # stage rather than in a footnote.
   - id: commercial-app-on-managed-hosting
     when:
       shape: [service]
       serverless_fit: [fits]
-      payments: [stripe, paddle, lemonsqueezy, braintree, paypal]
+      commercial: ["yes"]
     cost_low: 20
     confidence: high
     source: "Vercel Pro $20 per user per month; Hobby is non commercial only; Neon free tier 0.5 GB, read 2026-08-04"
-    stage: "Managed hosting on the cheapest paid plan, because you take payments (est. ${cost_low}/mo)"
+    stage: "Managed hosting on the cheapest paid plan, because this looks like a business (est. ${cost_low}/mo)"
     headroom: "That plan carries this well past the point where you would notice, and the database stays free at this size"
-    tripwire: "The free plan you may be on now is licensed for personal, non commercial use only, and taking payments is commercial. Budget ${cost_low}/mo the day you take a real customer."
+    tripwire: "The free plan you may be on now is licensed for personal, non commercial use only, and this is not that. Budget ${cost_low}/mo from the day you take a real customer."
 
   # Same free hosting, but a database has its own free ceiling, and for a
   # growing app that ceiling arrives before the request limits do.
@@ -135,7 +136,7 @@ stages:
     source: "Neon free tier 0.5 GB per project; Cloudflare Workers free 100,000 requests/day, read 2026-08-04"
     stage: "A free managed tier covers this, database included (est. $0/mo)"
     headroom: "The hosting stays free into the tens of thousands of visits a month, and the free database plans hold about {free_storage} of data, which is a lot of rows for a young product"
-    tripwire: "The database fills up before the traffic runs out. When you pass {free_storage} of stored data, expect to start paying for storage by the gigabyte. If you start taking payments, the free hosting plans are personal use only and you move to about $20/mo."
+    tripwire: "The database fills up before the traffic runs out. When you pass {free_storage} of stored data, expect to start paying for storage by the gigabyte. Those free hosting plans are also licensed for personal, non commercial use, so a business pays about $20/mo whatever the traffic is doing."
 
   - id: app-on-free-managed-hosting
     when:
@@ -147,7 +148,7 @@ stages:
     source: "Cloudflare Workers free: 100,000 requests/day; Vercel Hobby: 100 GB transfer and 1M invocations/mo, read 2026-08-04"
     stage: "A free managed tier covers this (est. $0/mo)"
     headroom: "Cloudflare Workers allows {free_requests} requests a day free, and Vercel's free plan allows 100 GB of traffic a month, either of which is a long way off for a new app"
-    tripwire: "If you start taking payments, the free plans are personal use only and you move to about $20/mo. If you outgrow the request limits first, the next step is about ${next_tier_cost}/mo."
+    tripwire: "Those free plans are licensed for personal, non commercial use, so the day this becomes a business it is about $20/mo whatever the traffic is doing. If you outgrow the request limits first, the next step is about ${next_tier_cost}/mo."
 
   - id: app-with-managed-database
     when:

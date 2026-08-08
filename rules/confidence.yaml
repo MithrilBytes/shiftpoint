@@ -1,9 +1,19 @@
 # The sentence printed under every verdict. Low confidence is stated plainly
 # rather than papered over with a guess.
-version: 1
+version: 2
 updated: "2026-08-04"
 
 notes:
   high: "Confidence: high. The files in this repository point clearly at this answer."
   medium: "Confidence: medium. Some of this is inferred from what the repository does not contain."
   low: "Confidence: low. There was not enough in this repository to be sure. Treat this as a starting point, not an answer."
+
+# Appended to the note above when they apply. A caveat is for something that
+# makes the answer fit less well, which is different from the evidence being
+# thin. It goes on the confidence line because that is already where a reader
+# looks to find out how much to trust what they just read.
+caveats:
+  - id: several-applications
+    when:
+      apps: [several]
+    text: "This repository holds more than one deployable application, and the answer above treats them as a single system. Run this again inside each one for a closer answer."
