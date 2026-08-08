@@ -1,0 +1,12 @@
+# The accuracy the suite requires. These exist to stop regression, not to
+# certify quality. Raise one by improving the tool until the number moves on
+# its own, never by relabelling a case.
+#
+# Set from the first honest measurement, a little below it, so ordinary noise
+# does not turn the build red.
+tune:
+  stage: 0.0
+  flags: 0.0
+holdout:
+  stage: 0.0
+  flags: 0.0

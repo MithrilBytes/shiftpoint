@@ -1,23 +1,38 @@
 import type { Confidence, Profile, Verdict } from "../types.js";
 import { lowestConfidence } from "../types.js";
-import type { RuleSet } from "./load.js";
+import type { FlagRule, RuleSet, StageRule } from "./load.js";
 
 /**
  * Maps a profile onto a verdict. This function holds no numbers and no prose:
  * both come from rules/, so changing a price or a sentence never means changing
  * code.
  */
+/**
+ * The stage rule a profile selects, or undefined if the rules have no catch all.
+ *
+ * Exposed because two rules can render byte identical prose, so the id is the
+ * only way to ask which one answered. The corpus needs that to score itself.
+ */
+export function selectStage(profile: Profile, rules: RuleSet): StageRule | undefined {
+  return rules.stages.find((rule) => matches(rule.when, profile.fields));
+}
+
+/** The flag rules a profile fires, in the order they are declared. */
+export function selectFlags(profile: Profile, rules: RuleSet): FlagRule[] {
+  return rules.flags.filter((rule) => matches(rule.when, profile.fields));
+}
+
 export function evaluate(profile: Profile, rules: RuleSet): Verdict {
-  const stage = rules.stages.find((rule) => matches(rule.when, profile.fields));
+  const stage = selectStage(profile, rules);
   if (stage === undefined) {
     throw new Error(
       "rules/stages.yaml: nothing matched. The last stage needs \"when: {}\" so every repository gets an answer.",
     );
   }
 
-  const flags = rules.flags
-    .filter((rule) => matches(rule.when, profile.fields))
-    .map((rule) => fill(rule.text, rule.scalars, `rules/flags.yaml: flag "${rule.id}"`));
+  const flags = selectFlags(profile, rules).map((rule) =>
+    fill(rule.text, rule.scalars, `rules/flags.yaml: flag "${rule.id}"`),
+  );
 
   // A verdict is only as strong as the weakest signal it leaned on.
   const matched: Confidence[] = Object.keys(stage.when).map(

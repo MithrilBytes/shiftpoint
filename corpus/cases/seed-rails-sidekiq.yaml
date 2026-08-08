@@ -1,0 +1,15 @@
+id: seed-rails-sidekiq
+origin: "Rails SaaS with a worker and managed Postgres. The common shape."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "rails", "~> 7.1"
+    gem "sidekiq"
+    gem "pg"
+  app/workers/mail_worker.rb: |
+    class MailWorker
+      include Sidekiq::Worker
+    end

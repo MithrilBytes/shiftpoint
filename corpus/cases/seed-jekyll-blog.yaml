@@ -1,0 +1,11 @@
+id: seed-jekyll-blog
+origin: "A Jekyll blog on GitHub Pages. The canonical free static site."
+expect:
+  stage: static-site
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "jekyll"
+  _config.yml: |
+    title: A blog

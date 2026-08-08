@@ -1,0 +1,18 @@
+id: seed-express-k8s
+origin: "A URL shortener wrapped in Kubernetes. The downward detection case."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [kubernetes-without-demand]
+files:
+  package.json: |
+    {"name":"short","private":true,"dependencies":{"express":"^4.19.2"}}
+  index.js: |
+    const express = require("express");
+    express().listen(3000);
+  k8s/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: short
+    spec:
+      replicas: 3
