@@ -2,6 +2,7 @@ import type { Repo } from "../repo.js";
 import type { Signal } from "../types.js";
 import {
   composeServices,
+  goDependencies,
   manifestFiles,
   nodeDependencies,
   pythonDependencies,
@@ -78,6 +79,9 @@ export function detectDatabase(repo: Repo): Signal[] {
   }
   for (const name of rubyDependencies(repo)) {
     note(ENGINE_BY_ALIAS.get(name), `Gemfile requires ${name}`);
+  }
+  for (const name of goDependencies(repo)) {
+    note(ENGINE_BY_ALIAS.get(name), `go.mod requires ${name}`);
   }
 
   // The Python standard library ships sqlite3, so it never appears in a

@@ -102,9 +102,22 @@ Do nothing today.
 
 Requires Node 20 or newer.
 
+shiftpoint is not on npm yet, so run it from a clone:
+
 ```bash
-npx shiftpoint
+git clone https://github.com/MithrilBytes/shiftpoint.git
 ```
+
+```bash
+cd shiftpoint && npm install && npm run build
+```
+
+```bash
+node dist/cli.js /path/to/your/repo
+```
+
+Once it is published, that becomes `npx shiftpoint`. Every example below uses
+that shorter form.
 
 ## Usage
 

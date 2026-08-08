@@ -32,6 +32,19 @@ const SKIP_DIRECTORIES = new Set([
   "coverage",
   ".terraform",
   ".cache",
+  // Sample and test material. Code in here is written to exercise something
+  // else, so it describes no deployment of its own. Reading it makes one
+  // application look like several and lets a fixture's dependencies stand in
+  // for the repository's own.
+  "fixtures",
+  "__fixtures__",
+  "testdata",
+  "test-data",
+  "testfixtures",
+  "examples",
+  "example",
+  "samples",
+  "__mocks__",
 ]);
 
 // Engineering guards, not capacity priors. These keep a pathological

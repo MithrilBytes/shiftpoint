@@ -112,6 +112,49 @@ function requirementName(line: string): string | undefined {
   return name === "" ? undefined : name;
 }
 
+/**
+ * Module names from every go.mod, normalised so a full import path can be
+ * matched against the same short names the other languages use.
+ * "github.com/go-chi/chi/v5" yields chi, "modernc.org/sqlite" yields sqlite,
+ * and "github.com/mattn/go-sqlite3" yields sqlite3.
+ */
+export function goDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+
+  for (const file of goModFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.split("//")[0]?.trim() ?? "";
+      const match = /^(?:require\s+)?([^\s()]+\/[^\s()]+)\s+v\d/.exec(line);
+      const path = match?.[1];
+      if (path === undefined) continue;
+
+      names.add(path.toLowerCase());
+      for (const segment of path.toLowerCase().split("/")) {
+        // Version suffixes carry no meaning, and Go projects conventionally
+        // prefix or suffix a package name with the language.
+        if (/^v\d+$/.test(segment)) continue;
+        names.add(segment);
+        names.add(segment.replace(/^go-/, "").replace(/-go$/, ""));
+      }
+    }
+  }
+
+  return names;
+}
+
+/** Everything the repository declares it depends on, whatever the language. */
+export function declaredDependencies(repo: Repo): Set<string> {
+  return new Set([
+    ...nodeDependencies(repo),
+    ...pythonDependencies(repo),
+    ...rubyDependencies(repo),
+    ...goDependencies(repo),
+  ]);
+}
+
 /** Gem names from every Gemfile. */
 export function rubyDependencies(repo: Repo): Set<string> {
   const names = new Set<string>();

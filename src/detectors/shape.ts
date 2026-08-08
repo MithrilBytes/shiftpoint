@@ -1,7 +1,7 @@
 import type { Repo } from "../repo.js";
 import type { Signal } from "../types.js";
 import { detectFramework } from "./framework.js";
-import { manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
+import { declaredDependencies, manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
 
 const NOTEBOOK = /\.ipynb$/;
 const INDEX_HTML = /(^|\/)index\.html$/;
@@ -52,13 +52,26 @@ export function detectShape(repo: Repo): Signal[] {
     return [signal("library", "medium", published)];
   }
 
-  if (scripts.length > 0) {
+  // A project that declares dependencies has been set up to run as something,
+  // and if none of them is a framework this tool knows, the honest answer is
+  // that it could not tell. Calling it a script instead would route it to the
+  // free function tier and quote $0, which is confidently wrong in the
+  // direction that costs the owner money.
+  const declared = declaredDependencies(repo);
+  if (declared.size > 0) {
     return [
       signal(
-        "script",
-        manifestFiles(repo).length > 0 ? "high" : "medium",
-        `${scripts.length} source file(s) and no web framework, including ${scripts[0]}`,
+        "unknown",
+        "low",
+        `${manifestFiles(repo).join(", ")} declares ${declared.size} dependencies, none of them a framework this tool recognizes`,
       ),
+    ];
+  }
+
+  // No declared dependencies at all, so loose source files really are loose.
+  if (scripts.length > 0) {
+    return [
+      signal("script", "medium", `${scripts.length} source file(s), no manifest, and no web framework`),
     ];
   }
 

@@ -60,6 +60,34 @@ describe("framework", () => {
     });
   });
 
+  it("reads dependencies out of go.mod, including the database driver", () => {
+    withRepo(
+      {
+        "go.mod": "module example.com/api\n\ngo 1.22\n\nrequire (\n\tgithub.com/go-chi/chi/v5 v5.0.12\n\tmodernc.org/sqlite v1.30.0\n)\n",
+        "main.go": "package main\n",
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "language")).toEqual(["go"]);
+        expect(values(detectFramework(repo), "framework")).toEqual(["chi"]);
+        expect(values(detectDatabase(repo), "database")).toEqual(["sqlite"]);
+      },
+    );
+  });
+
+  it("recognizes the frameworks that used to fall through to a script", () => {
+    const cases: Array<[Record<string, string>, string]> = [
+      [{ "requirements.txt": "fastapi==0.111.0\n" }, "fastapi"],
+      [{ "package.json": JSON.stringify({ dependencies: { astro: "^4" } }) }, "astro"],
+      [{ "package.json": JSON.stringify({ dependencies: { "@sveltejs/kit": "^2" } }) }, "sveltekit"],
+      [{ Gemfile: 'gem "sinatra"\n' }, "sinatra"],
+    ];
+    for (const [files, expected] of cases) {
+      withRepo(files, (repo) => {
+        expect(values(detectFramework(repo), "framework"), expected).toEqual([expected]);
+      });
+    }
+  });
+
   it("reports an unrecognized framework as unknown at low confidence", () => {
     withRepo({ "main.c": "int main(void){return 0;}" }, (repo) => {
       const framework = detectFramework(repo).find((signal) => signal.kind === "framework");
@@ -229,10 +257,46 @@ describe("shape", () => {
     });
   });
 
-  it("calls a loose source file a script", () => {
+  it("calls a loose source file a script only when nothing is declared", () => {
     withRepo({ "src/report.py": "print('hi')\n" }, (repo) => {
       expect(values(detectShape(repo), "shape")).toEqual(["script"]);
     });
+  });
+
+  it("says unknown, not script, when a project declares dependencies it does not recognize", () => {
+    // Calling this a script routed it to the free function tier and quoted $0,
+    // which is confidently wrong in the direction that costs the owner money.
+    withRepo(
+      { "requirements.txt": "some-unknown-web-thing==1.0\nanother-dep==2.0\n", "main.py": "x = 1\n" },
+      (repo) => {
+        const shape = detectShape(repo)[0];
+        expect(shape?.values).toEqual(["unknown"]);
+        expect(shape?.confidence).toBe("low");
+      },
+    );
+  });
+});
+
+describe("sample and test material", () => {
+  it("does not let a fixture directory stand in for the repository", () => {
+    // Every signal used to be scavenged from whatever the fixtures contained,
+    // so a repo with test material described a stack nobody deployed.
+    withRepo(
+      {
+        "package.json": JSON.stringify({ bin: { thing: "./cli.js" } }),
+        "cli.js": "",
+        "fixtures/app/Gemfile": 'gem "rails"\ngem "sidekiq"\n',
+        "fixtures/app/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "examples/demo/requirements.txt": "torch==2.3.1\n",
+        "testdata/sample/package.json": JSON.stringify({ dependencies: { express: "^4" } }),
+      },
+      (repo) => {
+        expect(values(detectShape(repo), "shape")).toEqual(["cli"]);
+        expect(values(detectJobs(repo), "jobs")).toEqual(["none"]);
+        expect(detectApps(repo)[0]?.metric).toBe(0);
+        expect(values(detectServerless(repo), "blocked_by")).toEqual(["none"]);
+      },
+    );
   });
 });
 

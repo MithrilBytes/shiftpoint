@@ -1,6 +1,6 @@
 import type { Repo } from "../repo.js";
 import type { Signal } from "../types.js";
-import { nodeDependencies, pythonDependencies, rubyDependencies } from "./manifest.js";
+import { declaredDependencies } from "./manifest.js";
 
 const PROCESSOR_BY_DEPENDENCY = new Map<string, string>([
   ["stripe", "stripe"],
@@ -46,11 +46,7 @@ export function detectCommercial(repo: Repo): Signal[] {
   const processors = new Map<string, string>();
   const other: string[] = [];
 
-  const dependencies = new Set([
-    ...nodeDependencies(repo),
-    ...pythonDependencies(repo),
-    ...rubyDependencies(repo),
-  ]);
+  const dependencies = declaredDependencies(repo);
 
   for (const name of dependencies) {
     const processor = PROCESSOR_BY_DEPENDENCY.get(name);

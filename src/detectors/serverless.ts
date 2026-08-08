@@ -2,7 +2,7 @@ import type { Repo } from "../repo.js";
 import type { Signal } from "../types.js";
 import { detectDatabase } from "./database.js";
 import { detectJobs } from "./jobs.js";
-import { nodeDependencies, pythonDependencies, rubyDependencies } from "./manifest.js";
+import { declaredDependencies } from "./manifest.js";
 
 // Dependencies that need a process that outlives a request.
 const PERSISTENT_CONNECTION = new Set([
@@ -54,11 +54,7 @@ export function detectServerless(repo: Repo): Signal[] {
     kinds.push("background_work");
   }
 
-  const dependencies = new Set([
-    ...nodeDependencies(repo),
-    ...pythonDependencies(repo),
-    ...rubyDependencies(repo),
-  ]);
+  const dependencies = declaredDependencies(repo);
 
   const held = [...dependencies].filter((name) => PERSISTENT_CONNECTION.has(name)).sort();
   if (held.length > 0) {

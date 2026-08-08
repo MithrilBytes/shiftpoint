@@ -2,6 +2,7 @@ import type { Repo } from "../repo.js";
 import type { Signal } from "../types.js";
 import {
   gemfiles,
+  goDependencies,
   goModFiles,
   manifestFiles,
   nodeDependencies,
@@ -19,11 +20,29 @@ const INDEX_HTML = /(^|\/)index\.html$/;
  * application" the same way.
  */
 export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
+  // Node
   ["next", "nextjs"],
   ["express", "express"],
+  ["fastify", "fastify"],
+  ["koa", "koa"],
+  ["hono", "hono"],
+  ["@nestjs/core", "nestjs"],
+  ["astro", "astro"],
+  ["nuxt", "nuxt"],
+  ["@sveltejs/kit", "sveltekit"],
+  ["@remix-run/node", "remix"],
+  // Python
   ["flask", "flask"],
   ["django", "django"],
+  ["fastapi", "fastapi"],
+  // Ruby
   ["rails", "rails"],
+  ["sinatra", "sinatra"],
+  // Go, matched on the normalised segments goDependencies produces
+  ["chi", "chi"],
+  ["gin", "gin"],
+  ["echo", "echo"],
+  ["fiber", "fiber"],
 ]);
 
 /**
@@ -77,6 +96,7 @@ export function detectFramework(repo: Repo): Signal[] {
     [nodeDependencies(repo), "package.json depends on"],
     [pythonDependencies(repo), "a python manifest requires"],
     [rubyDependencies(repo), "Gemfile requires"],
+    [goDependencies(repo), "go.mod requires"],
   ];
 
   for (const [names, phrase] of sources) {

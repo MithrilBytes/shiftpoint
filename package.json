@@ -3,6 +3,7 @@
   "version": "0.1.0",
   "description": "Statically analyze a repository and report the infrastructure it actually needs.",
   "license": "MIT",
+  "private": true,
   "type": "module",
   "bin": {
     "shiftpoint": "dist/cli.js"
@@ -29,7 +30,7 @@
     "test": "vitest run",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "check:dashes": "node scripts/check-dashes.mjs",
-    "prepublishOnly": "npm run build"
+    "prepublishOnly": "node scripts/guard-publish.mjs && npm run build"
   },
   "dependencies": {
     "yaml": "^2.4.5"
