@@ -4,6 +4,12 @@ import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadRepo, type Repo } from "../src/scan/repo.js";
 
+// Re-exported so a test can assert "every renderer survives this" without
+// importing three modules to say it.
+export { renderTerminal } from "../src/render/terminal.js";
+export { renderMarkdown } from "../src/render/markdown.js";
+export { renderJson } from "../src/render/json.js";
+
 export const REPO_ROOT = fileURLToPath(new URL("..", import.meta.url));
 export const FIXTURES_DIR = join(REPO_ROOT, "fixtures");
 export const GOLDENS_DIR = join(REPO_ROOT, "goldens");

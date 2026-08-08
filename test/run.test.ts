@@ -1,4 +1,4 @@
-import { cpSync, mkdtempSync, readFileSync, rmSync } from "node:fs";
+import { cpSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { describe, expect, it } from "vitest";
@@ -88,5 +88,39 @@ describe("run", () => {
     const result = capture(["--nope"]);
     expect(result.code).toBe(1);
     expect(result.err).toContain("Run shiftpoint --help.");
+  });
+
+  it("writes the same INFRA.md every time, and replaces an older one", () => {
+    const root = mkdtempSync(join(tmpdir(), "shiftpoint-write-"));
+    try {
+      cpSync(join(FIXTURES_DIR, "nextjs-crud"), root, { recursive: true });
+      writeFileSync(join(root, "INFRA.md"), "# stale\n\nsomething a previous run left behind\n");
+
+      capture([root, "--write"]);
+      const first = readFileSync(join(root, "INFRA.md"), "utf8");
+      capture([root, "--write"]);
+      const second = readFileSync(join(root, "INFRA.md"), "utf8");
+
+      expect(second).toBe(first);
+      expect(first).not.toContain("stale");
+      // Writing INFRA.md must not change the verdict on the next run: the file
+      // it writes is markdown, and markdown is not a signal.
+      expect(first).toBe(readFileSync(join(GOLDENS_DIR, "nextjs-crud.md"), "utf8"));
+    } finally {
+      rmSync(root, { recursive: true, force: true });
+    }
+  });
+
+  it("emits JSON that parses for every fixture", () => {
+    for (const fixture of readdirSync(FIXTURES_DIR, { withFileTypes: true }).filter((e) => e.isDirectory())) {
+      const result = capture([join(FIXTURES_DIR, fixture.name), "--json"]);
+      expect(result.code, fixture.name).toBe(0);
+      const parsed = JSON.parse(result.out) as Record<string, unknown>;
+      expect(Object.keys(parsed), fixture.name).toEqual([
+        "schema", "stage", "headroom", "tripwire", "flags",
+        "confidence", "confidenceNote", "doNothingToday",
+      ]);
+      expect(typeof parsed["stage"], fixture.name).toBe("string");
+    }
   });
 });
