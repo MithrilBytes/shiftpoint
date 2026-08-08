@@ -27,7 +27,12 @@ const BUSINESS_TOOLING = new Set([
 ]);
 
 // Routes that only exist when someone is being sold something.
-const SELLING_ROUTE = /(^|\/)(pricing|checkout|billing|subscribe)(\/|\.[a-z]+$)/i;
+//
+// Anchored to the directories frameworks actually serve routes from. Matched
+// against any path, a microservice named services/billing/ or a docs/pricing.md
+// was enough to call an internal tool a business and charge it $20/mo.
+const SELLING_ROUTE =
+  /(^|\/)(app|pages|src\/pages|src\/routes|routes|views|templates)\/[^/]*(pricing|checkout|subscribe)(\/|\.[a-z]+$)/i;
 
 /**
  * Whether this repository is a commercial project.

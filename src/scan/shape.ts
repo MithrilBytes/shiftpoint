@@ -1,6 +1,7 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectFramework } from "./framework.js";
+import { detectJobs } from "./jobs.js";
 import { declaredDependencies, manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
 
 const NOTEBOOK = /\.ipynb$/;
@@ -34,7 +35,14 @@ export function detectShape(repo: Repo): Signal[] {
 
   // Notebooks are checked before packaging: a repository can carry a
   // pyproject.toml and still be an analysis, not something you deploy.
-  if (notebooks.length > 0 && notebooks.length >= scripts.length) {
+  //
+  // Background work outranks them, though. A queue library means something here
+  // runs on a schedule somebody depends on, and one scratch notebook next to a
+  // Celery worker used to answer "there is nothing to host here" at high
+  // confidence, which is the opposite of true.
+  const queues = detectJobs(repo)[0]?.values ?? ["none"];
+  const hasBackgroundWork = !queues.includes("none");
+  if (!hasBackgroundWork && notebooks.length > 0 && notebooks.length >= scripts.length) {
     return [signal("notebook", "high", `${notebooks.length} notebook(s), including ${notebooks[0]}`)];
   }
 

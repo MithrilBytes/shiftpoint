@@ -45,7 +45,17 @@ const SKIP_DIRECTORIES = new Set([
   "example",
   "samples",
   "__mocks__",
+  // Vendored third party source. A checked in dependency tree describes what
+  // somebody else built, and reading it lets a vendored driver set the price.
+  "site-packages",
+  "third_party",
+  "bower_components",
+  "Pods",
 ]);
+
+// A directory holding one of these is a dependency tree, whatever it is called.
+// Virtual environments are routinely named env/ or .env39/ rather than venv/.
+const VENDORED_MARKERS = ["pyvenv.cfg", "site-packages"];
 
 // Engineering guards, not capacity priors. These keep a pathological
 // repository from stalling the run; they never influence a verdict.
@@ -101,15 +111,20 @@ function walk(root: string, dir: string, sizes: Map<string, number>): void {
       // repository, not this one, and counting them makes one application
       // look like several.
       if (existsSync(join(full, ".git"))) continue;
+      if (VENDORED_MARKERS.some((marker) => existsSync(join(full, marker)))) continue;
       walk(root, full, sizes);
       continue;
     }
 
-    // Symlinks are skipped, which also removes any chance of a walk cycle.
-    if (!entry.isFile()) continue;
+    // A symlink to a file is followed, because pnpm workspaces and Nix style
+    // layouts symlink manifests and skipping them hid the whole project. A
+    // symlink to a directory is not, which is what keeps the walk acyclic.
+    if (!entry.isFile() && !entry.isSymbolicLink()) continue;
 
     try {
-      sizes.set(toPosix(relative(root, full)), statSync(full).size);
+      const stats = statSync(full);
+      if (!stats.isFile()) continue;
+      sizes.set(toPosix(relative(root, full)), stats.size);
     } catch {
       continue;
     }

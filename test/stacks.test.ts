@@ -1,6 +1,9 @@
 import { describe, expect, it } from "vitest";
 import { analyze } from "../src/analyze.js";
-import { REPO_ROOT, withRepo } from "./helpers.js";
+import { detectCommercial } from "../src/scan/commercial.js";
+import { detectDatabase } from "../src/scan/database.js";
+import { detectFramework } from "../src/scan/framework.js";
+import { REPO_ROOT, values, withRepo } from "./helpers.js";
 
 /**
  * Whole stacks, end to end, for shapes that have no fixture of their own.
@@ -148,5 +151,102 @@ describe("mistakes that quoted a price with confidence", () => {
     withRepo({ "package.json": "\uFEFF" + JSON.stringify({ dependencies: { next: "^14" } }) }, (_repo, root) => {
       expect(analyze(root).verdict.stage).toContain("$0/mo");
     });
+  });
+});
+
+describe("verdicts a founder would have argued with", () => {
+  it("does not let one scratch notebook outrank a queue worker", () => {
+    withRepo(
+      {
+        "requirements.txt": "celery==5.4.0\nredis==5.0.7\npsycopg2-binary==2.9.9\n",
+        "tasks.py": "from celery import Celery\n",
+        "notebooks/explore.ipynb": '{"cells":[],"nbformat":4,"nbformat_minor":5}',
+      },
+      (_repo, root) => {
+        const { verdict } = analyze(root);
+        expect(verdict.stage).toContain("background work");
+        expect(verdict.stage).not.toContain("nothing to host here");
+      },
+    );
+  });
+
+  it("sees the Postgres drivers people actually use", () => {
+    const drivers: Array<[string, Record<string, string>]> = [
+      ["pgx", { "go.mod": "module x\n\ngo 1.22\n\nrequire github.com/jackc/pgx/v5 v5.6.0\n", "main.go": "package main\n" }],
+      ["lib/pq", { "go.mod": "module x\n\ngo 1.22\n\nrequire github.com/lib/pq v1.10.9\n", "main.go": "package main\n" }],
+      ["supabase", { "package.json": JSON.stringify({ dependencies: { "@supabase/supabase-js": "^2" } }) }],
+      ["neon", { "package.json": JSON.stringify({ dependencies: { "@neondatabase/serverless": "^0.9" } }) }],
+    ];
+    for (const [name, files] of drivers) {
+      withRepo(files, (repo) => {
+        expect(values(detectDatabase(repo), "database"), name).toEqual(["postgres"]);
+      });
+    }
+  });
+
+  it("does not call an internal billing service a business", () => {
+    // A microservice directory is not a checkout page, and calling it one
+    // promoted a private tool from free to $20/mo.
+    withRepo(
+      {
+        "services/billing/go.mod": "module x\n\ngo 1.22\n\nrequire github.com/go-chi/chi/v5 v5.0.12\n",
+        "services/billing/main.go": "package main\n",
+      },
+      (repo) => {
+        expect(values(detectCommercial(repo), "commercial")).toEqual(["unclear"]);
+      },
+    );
+  });
+
+  it("still reads a real checkout route as a business", () => {
+    withRepo(
+      { "package.json": JSON.stringify({ dependencies: { next: "^14" } }), "app/checkout/page.tsx": "export default () => null;" },
+      (repo) => {
+        expect(values(detectCommercial(repo), "commercial")).toEqual(["yes"]);
+      },
+    );
+  });
+
+  it("answers for a static site that carries build tooling", () => {
+    // Requiring zero manifests made the tool abstain on the easiest question
+    // it gets asked. Jekyll is the canonical GitHub Pages stack.
+    const sites: Array<[string, Record<string, string>]> = [
+      ["jekyll", { Gemfile: 'source "https://rubygems.org"\ngem "jekyll"\n', "_config.yml": "title: site\n" }],
+      ["a formatter only package.json", { "index.html": "<h1>hi</h1>", "package.json": JSON.stringify({ devDependencies: { prettier: "^3" } }) }],
+      ["eleventy", { "package.json": JSON.stringify({ devDependencies: { "@11ty/eleventy": "^2" } }), "index.html": "<h1>hi</h1>" }],
+    ];
+    for (const [name, files] of sites) {
+      withRepo(files, (_repo, root) => {
+        expect(analyze(root).verdict.stage, name).toContain("$0/mo");
+      });
+    }
+  });
+
+  it("does not call an application static because of a nested template", () => {
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { "some-unknown-server": "^1" } }),
+        "src/views/index.html": "<h1>hi</h1>",
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).not.toContain("static");
+      },
+    );
+  });
+
+  it("ignores a virtual environment whatever it is named", () => {
+    // A driver vendored inside env/ used to set the database for the whole
+    // repository. The marker file identifies it, the directory name does not.
+    withRepo(
+      {
+        "requirements.txt": "flask==3.0.3\npsycopg2-binary==2.9.9\n",
+        "app.py": "from flask import Flask\n",
+        "env/pyvenv.cfg": "home = /usr\n",
+        "env/lib/python3.11/site-packages/sqlalchemy/x.py": "import sqlite3\n",
+      },
+      (repo) => {
+        expect(values(detectDatabase(repo), "database")).toEqual(["postgres"]);
+      },
+    );
   });
 });

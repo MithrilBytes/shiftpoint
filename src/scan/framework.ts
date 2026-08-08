@@ -28,6 +28,15 @@ export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
   ["hono", "hono"],
   ["@nestjs/core", "nestjs"],
   ["astro", "astro"],
+  // Static site generators. They build to files a free host serves, so they
+  // answer the static question rather than the server one.
+  ["jekyll", "static"],
+  ["@11ty/eleventy", "static"],
+  ["eleventy", "static"],
+  ["gatsby", "static"],
+  ["@docusaurus/core", "static"],
+  ["vitepress", "static"],
+  ["mkdocs", "static"],
   ["nuxt", "nuxt"],
   ["@sveltejs/kit", "sveltekit"],
   ["@remix-run/node", "remix"],
@@ -109,12 +118,23 @@ export function detectFramework(repo: Repo): Signal[] {
   }
   frameworks.sort();
 
-  // No manifest of any kind plus checked in HTML is a static site. That is a
+  // Checked in HTML with no framework behind it is a static site. That is a
   // positive finding, not a fallback: both halves are evidence.
+  //
+  // A manifest does not disqualify it. Plenty of static sites carry a
+  // package.json holding nothing but a formatter, and requiring zero manifests
+  // made the tool abstain on exactly the repositories whose answer is easiest.
+  // It does raise the bar to an index.html at the root, so that a stray
+  // template deep inside an application cannot claim the whole repository.
   const html = repo.matching(INDEX_HTML);
-  if (frameworks.length === 0 && manifestFiles(repo).length === 0 && html.length > 0) {
+  const rooted = repo.has("index.html");
+  if (frameworks.length === 0 && (manifestFiles(repo).length === 0 ? html.length > 0 : rooted)) {
     frameworks.push("static");
-    frameworkEvidence.push(`${html[0]} with no dependency manifest`);
+    frameworkEvidence.push(
+      manifestFiles(repo).length === 0
+        ? `${html[0]} with no dependency manifest`
+        : "index.html at the root and no framework in any manifest",
+    );
   }
 
   const framework: Signal =
