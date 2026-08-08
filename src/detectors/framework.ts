@@ -43,15 +43,19 @@ export function detectFramework(repo: Repo): Signal[] {
     languageEvidence.push("go.mod");
   }
 
-  const language: Signal = {
-    kind: "language",
-    values: languages.length > 0 ? languages : ["none"],
-    confidence: "high",
-    evidence:
-      languages.length > 0
-        ? `found ${languageEvidence.join(", ")}`
-        : "no dependency manifest anywhere in the repository",
-  };
+  // A manifest is the strongest evidence, but plenty of real projects are a
+  // few source files and a virtual environment that is not checked in. Falling
+  // back to file extensions keeps those visible, at lower confidence, because
+  // the code is evidence even when the dependency list is missing.
+  const language: Signal =
+    languages.length > 0
+      ? {
+          kind: "language",
+          values: languages,
+          confidence: "high",
+          evidence: `found ${languageEvidence.join(", ")}`,
+        }
+      : languageFromSources(repo);
 
   const frameworks: string[] = [];
   const frameworkEvidence: string[] = [];
@@ -106,4 +110,40 @@ export function detectFramework(repo: Repo): Signal[] {
         };
 
   return [language, framework];
+}
+
+const SOURCE_LANGUAGES: Array<{ pattern: RegExp; value: string }> = [
+  { pattern: /\.py$/, value: "python" },
+  { pattern: /\.[cm]?[jt]sx?$/, value: "node" },
+  { pattern: /\.rb$/, value: "ruby" },
+  { pattern: /\.go$/, value: "go" },
+];
+
+function languageFromSources(repo: Repo): Signal {
+  const found: string[] = [];
+  const evidence: string[] = [];
+
+  for (const { pattern, value } of SOURCE_LANGUAGES) {
+    const files = repo.matching(pattern);
+    if (files.length > 0) {
+      found.push(value);
+      evidence.push(`${files.length} ${value} source file(s), including ${files[0]}`);
+    }
+  }
+
+  if (found.length === 0) {
+    return {
+      kind: "language",
+      values: ["none"],
+      confidence: "high",
+      evidence: "no dependency manifest and no source files this tool recognizes",
+    };
+  }
+
+  return {
+    kind: "language",
+    values: found,
+    confidence: "medium",
+    evidence: `no dependency manifest, but ${evidence.join("; ")}`,
+  };
 }

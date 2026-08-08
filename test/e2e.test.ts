@@ -42,7 +42,7 @@ describe("the built CLI", () => {
       cwd: join(FIXTURES_DIR, "static-site"),
       encoding: "utf8",
     });
-    expect(output).toContain("Stage:    Static hosting is sufficient (est. $0-5/mo)");
+    expect(output).toContain("Stage:    Free static hosting covers this (est. $0/mo)");
     expect(output.trimEnd().endsWith("Do nothing today.")).toBe(true);
   });
 

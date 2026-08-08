@@ -18,8 +18,11 @@ describe("goldens", () => {
   it("covers every fixture", () => {
     expect(fixtures).toEqual([
       "flask-sqlite",
+      "jupyter-notebook",
       "k8s-overkill",
+      "ml-inference",
       "nextjs-crud",
+      "python-script",
       "rails-sidekiq",
       "static-site",
     ]);
@@ -48,5 +51,44 @@ describe("downward detection", () => {
     const { verdict } = analyze(join(FIXTURES_DIR, "rails-sidekiq"));
     expect(verdict.flags).toEqual([]);
     expect(verdict.doNothingToday).toBe(true);
+  });
+});
+
+describe("the free tier comes first", () => {
+  it("prices a static site, a script, and a stateless service at zero", () => {
+    for (const fixture of ["static-site", "python-script", "k8s-overkill"]) {
+      const { verdict } = analyze(join(FIXTURES_DIR, fixture));
+      expect(verdict.stage, fixture).toContain("$0/mo");
+    }
+  });
+
+  it("refuses to price something that is not a service", () => {
+    const { verdict, profile } = analyze(join(FIXTURES_DIR, "jupyter-notebook"));
+    expect(profile.fields["shape"]).toEqual(["notebook"]);
+    expect(verdict.stage).toContain("nothing to host here");
+    expect(verdict.stage).not.toMatch(/\$/);
+    expect(verdict.doNothingToday).toBe(true);
+  });
+
+  it("charges for a commercial app because the free plan does not license it", () => {
+    const { verdict, profile } = analyze(join(FIXTURES_DIR, "nextjs-crud"));
+    expect(profile.fields["payments"]).toEqual(["stripe"]);
+    expect(verdict.stage).toContain("$20/mo");
+    expect(verdict.tripwire).toContain("non commercial");
+  });
+
+  it("refuses to price a model runtime rather than quoting a server that cannot load it", () => {
+    const { verdict, profile } = analyze(join(FIXTURES_DIR, "ml-inference"));
+    expect(profile.fields["blocked_by"]).toContain("heavy_runtime");
+    expect(verdict.stage).toContain("sized by the model");
+    expect(verdict.stage).not.toMatch(/\$/);
+  });
+
+  it("sends work that needs a live process to a real server", () => {
+    for (const fixture of ["flask-sqlite", "rails-sidekiq"]) {
+      const { verdict, profile } = analyze(join(FIXTURES_DIR, fixture));
+      expect(profile.fields["serverless_fit"], fixture).toEqual(["blocked"]);
+      expect(verdict.stage, fixture).not.toContain("$0/mo");
+    }
   });
 });

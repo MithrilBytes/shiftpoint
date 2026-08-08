@@ -3,27 +3,61 @@
 # Every number a founder sees comes from this file. The engine contains no
 # numbers of its own, so updating a price is a one line change.
 #
-# Prices are US dollars per month and assume a mainstream provider
-# (DigitalOcean, Hetzner, Fly, Render, Railway) at list price.
+# Every rule that quotes a price carries the source it came from and the date
+# that source was last read. A price without a source is a guess, and a guess
+# in this file is a bug.
 #
-# Prose fields may reference any scalar field on the same rule with {braces}.
-version: 1
+# Prices are US dollars per month at list price. Prose fields may reference any
+# scalar field on the same rule with {braces}.
+version: 2
 updated: "2026-08-04"
 
 # First match wins. Rules run from most specific to least specific.
+#
+# The ladder starts at zero on purpose. For most small repositories the correct
+# answer is a free tier, and the job of this tool is to say where that free tier
+# ends rather than to sell a server.
 stages:
-  - id: static-site
+  # Things that are not services. Hosting advice does not apply to these, and
+  # inventing some is worse than saying nothing.
+  - id: notebook
     when:
-      framework: [static]
-    cost_low: 0
-    cost_high: 5
-    daily_visitors: 25k
-    next_tier_cost: 12
+      shape: [notebook]
     confidence: high
-    stage: "Static hosting is sufficient (est. ${cost_low}-{cost_high}/mo)"
-    headroom: "This stack typically serves ~{daily_visitors} daily visitors at this tier"
-    tripwire: "If you add a login, a database, or anything that saves what visitors type, revisit. The first paid step up is about ${next_tier_cost}/mo."
+    stage: "There is nothing to host here. This is analysis, not a service."
+    headroom: "Notebooks run on your own machine. No hosting bill applies until you turn one into something other people call."
+    tripwire: "If you wrap this in a web endpoint or run it on a schedule, run this again. That answer usually starts free."
 
+  - id: library
+    when:
+      shape: [library]
+    confidence: medium
+    stage: "There is nothing to host here. This is a package other people install."
+    headroom: "Publishing is free on the public registries. Your costs are whatever your users run it on."
+    tripwire: "If you add a hosted API or a docs site alongside the package, run this again."
+
+  - id: command-line-tool
+    when:
+      shape: [cli]
+    confidence: high
+    stage: "There is nothing to host here. This is a tool people run on their own machines."
+    headroom: "A command line tool costs nothing to distribute beyond the registry it is published to."
+    tripwire: "If you add a hosted service the tool talks to, run this again."
+
+  # A machine learning runtime is sized by the model, not by traffic. Quoting a
+  # small server price here would be worse than useless, because the cheapest
+  # servers cannot load these libraries at all. This rule deliberately gives no
+  # number rather than a wrong one.
+  - id: model-runtime
+    when:
+      blocked_by: [heavy_runtime]
+    confidence: medium
+    stage: "This is sized by the model it loads, not by how many people visit, so we will not put a price on it"
+    headroom: "Machine learning runtimes need memory and often a GPU, and the cheapest servers cannot load them at all. What you need depends on the model, not on your traffic."
+    tripwire: "If you put a web endpoint in front of this, the endpoint and the model are two separate bills. Price the model against the hardware it needs, then run this again on the endpoint alone."
+
+  # Background work needs a process that outlives a request, which is the one
+  # thing free function tiers do not sell.
   - id: app-with-background-work
     when:
       jobs:
@@ -41,66 +75,140 @@ stages:
           bull,
           agenda,
         ]
-    cost_low: 45
-    cost_high: 70
+    cost_low: 25
+    cost_high: 40
     daily_users: 10k
-    next_tier_cost: 120
+    next_tier_cost: 90
     confidence: medium
-    stage: "One server for the app and one for background work, plus a managed database (est. ${cost_low}-{cost_high}/mo)"
+    source: "DigitalOcean Droplets from $4/mo, Managed Postgres from $15/mo, read 2026-08-04"
+    stage: "One small server for the app, one for background work, and a managed database (est. ${cost_low}-{cost_high}/mo)"
     headroom: "This stack typically serves ~{daily_users} daily users at this tier"
     tripwire: "If background work starts backing up overnight, or your daily users pass ~{daily_users}, revisit. Next tier is ~${next_tier_cost}/mo."
 
+  - id: static-site
+    when:
+      shape: [static]
+    daily_visitors: 25k
+    next_tier_cost: 5
+    confidence: high
+    source: "Cloudflare Pages static asset requests are free and unlimited, read 2026-08-04"
+    stage: "Free static hosting covers this (est. $0/mo)"
+    headroom: "Cloudflare Pages and GitHub Pages both serve static files free with no request cap, comfortably past ~{daily_visitors} daily visitors"
+    tripwire: "If you add a login, a database, or anything that saves what visitors type, revisit. Adding server side code to the same free host starts at about ${next_tier_cost}/mo."
+
+  - id: script-on-free-functions
+    when:
+      shape: [script]
+      serverless_fit: [fits]
+    free_requests: 1 million
+    next_tier_cost: 1
+    confidence: medium
+    source: "AWS Lambda always free tier: 1M requests and 400,000 GB-seconds per month, read 2026-08-04"
+    stage: "A free function tier covers this (est. $0/mo)"
+    headroom: "AWS Lambda gives {free_requests} requests a month free and does not expire, which is more than a script like this is likely to use"
+    tripwire: "If this needs to answer faster than a cold start allows, or run longer than a few minutes at a time, you need a small always on server instead. That starts at about $4/mo. Past the free requests, cost rises by roughly ${next_tier_cost} per additional million."
+
+  # A payment processor means the free tier this would otherwise sit on is not
+  # licensed for it. That is a price change, so it belongs in the stage.
+  - id: commercial-app-on-managed-hosting
+    when:
+      shape: [service]
+      serverless_fit: [fits]
+      payments: [stripe, paddle, lemonsqueezy, braintree, paypal]
+    cost_low: 20
+    confidence: high
+    source: "Vercel Pro $20 per user per month; Hobby is non commercial only; Neon free tier 0.5 GB, read 2026-08-04"
+    stage: "Managed hosting on the cheapest paid plan, because you take payments (est. ${cost_low}/mo)"
+    headroom: "That plan carries this well past the point where you would notice, and the database stays free at this size"
+    tripwire: "The free plan you may be on now is licensed for personal, non commercial use only, and taking payments is commercial. Budget ${cost_low}/mo the day you take a real customer."
+
+  # Same free hosting, but a database has its own free ceiling, and for a
+  # growing app that ceiling arrives before the request limits do.
+  - id: app-on-free-managed-hosting-with-database
+    when:
+      shape: [service]
+      serverless_fit: [fits]
+      database: [postgres, mysql, mongo]
+    free_storage: 0.5 GB
+    next_tier_cost: 5
+    confidence: medium
+    source: "Neon free tier 0.5 GB per project; Cloudflare Workers free 100,000 requests/day, read 2026-08-04"
+    stage: "A free managed tier covers this, database included (est. $0/mo)"
+    headroom: "The hosting stays free into the tens of thousands of visits a month, and the free database plans hold about {free_storage} of data, which is a lot of rows for a young product"
+    tripwire: "The database fills up before the traffic runs out. When you pass {free_storage} of stored data, expect to start paying for storage by the gigabyte. If you start taking payments, the free hosting plans are personal use only and you move to about $20/mo."
+
+  - id: app-on-free-managed-hosting
+    when:
+      shape: [service]
+      serverless_fit: [fits]
+    free_requests: 100,000
+    next_tier_cost: 5
+    confidence: medium
+    source: "Cloudflare Workers free: 100,000 requests/day; Vercel Hobby: 100 GB transfer and 1M invocations/mo, read 2026-08-04"
+    stage: "A free managed tier covers this (est. $0/mo)"
+    headroom: "Cloudflare Workers allows {free_requests} requests a day free, and Vercel's free plan allows 100 GB of traffic a month, either of which is a long way off for a new app"
+    tripwire: "If you start taking payments, the free plans are personal use only and you move to about $20/mo. If you outgrow the request limits first, the next step is about ${next_tier_cost}/mo."
+
   - id: app-with-managed-database
     when:
-      framework: [nextjs, express, flask, django, rails]
+      shape: [service]
       database: [postgres, mysql, mongo]
     cost_low: 19
-    cost_high: 29
+    cost_high: 25
     daily_users: 5k
-    bandwidth_gb: 100
-    next_tier_cost: 60
+    next_tier_cost: 50
     confidence: high
-    stage: "One small server plus a managed database is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    source: "DigitalOcean Droplet $4/mo plus Managed Postgres $15/mo, read 2026-08-04"
+    stage: "One small server plus a managed database (est. ${cost_low}-{cost_high}/mo)"
     headroom: "This stack typically serves ~{daily_users} daily users at this tier"
-    tripwire: "If you add background jobs or exceed ~{bandwidth_gb}GB/mo bandwidth, revisit. Next tier is ~${next_tier_cost}/mo."
+    tripwire: "If you add background jobs or your daily users pass ~{daily_users}, revisit. Next tier is ~${next_tier_cost}/mo."
 
   - id: app-with-file-database
     when:
-      framework: [nextjs, express, flask, django, rails]
+      shape: [service]
       database: [sqlite]
-    cost_low: 6
-    cost_high: 12
+    cost_low: 4
+    cost_high: 9
     daily_users: 1k
-    next_tier_cost: 15
+    next_tier_cost: 19
     confidence: high
-    stage: "A single small server is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    source: "DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04"
+    stage: "One small always on server (est. ${cost_low}-{cost_high}/mo)"
     headroom: "This stack typically serves ~{daily_users} daily users at this tier"
-    tripwire: "If you need a second server, or more than one writer at the same time, the single file database becomes the limit. A managed database is about ${next_tier_cost}/mo."
+    tripwire: "If you need a second server, or more than one writer at the same time, the single file database becomes the limit. Moving to a managed database is about ${next_tier_cost}/mo."
 
-  - id: app-without-database
+  - id: app-needing-a-server
     when:
-      framework: [nextjs, express, flask, django, rails]
-      database: [none]
-    cost_low: 12
-    cost_high: 20
+      shape: [service]
+    cost_low: 4
+    cost_high: 9
     daily_users: 5k
-    bandwidth_gb: 50
-    next_tier_cost: 40
-    confidence: high
-    stage: "Single small VPS is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    next_tier_cost: 19
+    confidence: medium
+    source: "DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04"
+    stage: "One small always on server (est. ${cost_low}-{cost_high}/mo)"
     headroom: "This stack typically serves ~{daily_users} daily users at this tier"
-    tripwire: "If you add background jobs or exceed ~{bandwidth_gb}GB/mo bandwidth, revisit. Next tier is ~${next_tier_cost}/mo."
+    tripwire: "If you add a database you do not want to manage yourself, that is about ${next_tier_cost}/mo all in."
+
+  - id: script-needing-a-server
+    when:
+      shape: [script]
+    cost_low: 4
+    cost_high: 9
+    next_tier_cost: 19
+    confidence: low
+    source: "DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04"
+    stage: "One small always on server, if you want this running somewhere (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "We could not tell how much traffic this handles, so treat any number here as a guess"
+    tripwire: "Something in here needs a process that keeps running, which is what rules out the free function tiers. Remove that and this usually drops to $0."
 
   - id: known-language-only
     when:
       language: [node, python, ruby, go]
-    cost_low: 6
-    cost_high: 12
-    next_tier_cost: 25
     confidence: low
-    stage: "A single small server is the safe starting point (est. ${cost_low}-{cost_high}/mo)"
-    headroom: "We could not tell how much traffic this stack handles, so treat any number here as a guess"
-    tripwire: "Once this is running somewhere, revisit with real numbers. The next step up is about ${next_tier_cost}/mo."
+    stage: "We could not tell whether this is something you host, so we cannot price it"
+    headroom: "No headroom estimate. There was not enough in this repository to base one on."
+    tripwire: "If this is meant to run somewhere, add the framework or entry point it runs under and try again. Most projects this size start free."
 
   - id: unknown
     when: {}

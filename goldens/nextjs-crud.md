@@ -2,15 +2,15 @@
 
 What this repository needs today, based only on the files in it.
 
-**Stage:** One small server plus a managed database is sufficient (est. $19-29/mo)
+**Stage:** Managed hosting on the cheapest paid plan, because you take payments (est. $20/mo)
 
-**Headroom:** This stack typically serves ~5k daily users at this tier
+**Headroom:** That plan carries this well past the point where you would notice, and the database stays free at this size
 
-**Tripwire:** If you add background jobs or exceed ~100GB/mo bandwidth, revisit. Next tier is ~$60/mo.
+**Tripwire:** The free plan you may be on now is licensed for personal, non commercial use only, and taking payments is commercial. Budget $20/mo the day you take a real customer.
 
 **Flags:** None.
 
-Confidence: high. The files in this repository point clearly at this answer.
+Confidence: medium. Some of this is inferred from what the repository does not contain.
 
 Do nothing today.
 

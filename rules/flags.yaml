@@ -6,8 +6,11 @@
 # deployment configuration asks for. A replica count of 50 is an intention,
 # not a demand signal.
 #
+# Every flag that quotes a price carries the source it came from and the date
+# that source was last read.
+#
 # Prose fields may reference any scalar field on the same rule with {braces}.
-version: 1
+version: 2
 updated: "2026-08-04"
 
 flags:
@@ -15,11 +18,22 @@ flags:
     when:
       orchestration: [kubernetes]
       demand: [none]
-    monthly_cost: 70
-    text: "Found Kubernetes manifests. Adds ~${monthly_cost}/mo and ops burden with no signal you need it yet."
+    monthly_cost: 73
+    source: "Amazon EKS control plane $0.10/hour, about $73/mo, before any worker nodes, read 2026-08-04"
+    text: "Found Kubernetes manifests. The cluster alone is about ${monthly_cost}/mo before a single server to run on, with no signal you need it yet."
 
   - id: helm-without-demand
     when:
       orchestration: [helm]
       demand: [none]
     text: "Found a Helm chart. It manages releases across a fleet of services, and this repository holds one."
+
+  # Deliberately compose only. A bare Dockerfile is neutral in 2026: managed
+  # platforms take containers too, so owning one is not evidence of renting a
+  # server. A compose file describes a multi service stack you run yourself.
+  - id: composed-stack-that-runs-free
+    when:
+      serverless_fit: [fits]
+      container: [compose]
+      demand: [none]
+    text: "Found a compose file describing a stack you run on a server you rent, but nothing in this repository needs one. A free managed tier would host it as it stands."

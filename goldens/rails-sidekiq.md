@@ -2,11 +2,11 @@
 
 What this repository needs today, based only on the files in it.
 
-**Stage:** One server for the app and one for background work, plus a managed database (est. $45-70/mo)
+**Stage:** One small server for the app, one for background work, and a managed database (est. $25-40/mo)
 
 **Headroom:** This stack typically serves ~10k daily users at this tier
 
-**Tripwire:** If background work starts backing up overnight, or your daily users pass ~10k, revisit. Next tier is ~$120/mo.
+**Tripwire:** If background work starts backing up overnight, or your daily users pass ~10k, revisit. Next tier is ~$90/mo.
 
 **Flags:** None.
 

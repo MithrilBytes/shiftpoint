@@ -46,9 +46,9 @@ export function composeFiles(repo: Repo): string[] {
   return repo.matching(COMPOSE);
 }
 
-/** Dependency names from every package.json, runtime and development alike. */
-export function nodeDependencies(repo: Repo): Set<string> {
-  const names = new Set<string>();
+/** Every package.json that parses, paired with the path it came from. */
+export function nodeManifests(repo: Repo): Array<[string, Record<string, unknown>]> {
+  const manifests: Array<[string, Record<string, unknown>]> = [];
   for (const file of packageJsonFiles(repo)) {
     const text = repo.read(file);
     if (text === undefined) continue;
@@ -59,7 +59,15 @@ export function nodeDependencies(repo: Repo): Set<string> {
       continue;
     }
     if (typeof parsed !== "object" || parsed === null) continue;
-    const record = parsed as Record<string, unknown>;
+    manifests.push([file, parsed as Record<string, unknown>]);
+  }
+  return manifests;
+}
+
+/** Dependency names from every package.json, runtime and development alike. */
+export function nodeDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const [, record] of nodeManifests(repo)) {
     for (const key of ["dependencies", "devDependencies", "peerDependencies"]) {
       const block = record[key];
       if (typeof block !== "object" || block === null) continue;

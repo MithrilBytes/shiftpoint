@@ -47,7 +47,7 @@ describe("run", () => {
   it("prints a verdict for a repository", () => {
     const result = capture([join(FIXTURES_DIR, "nextjs-crud")]);
     expect(result.code).toBe(0);
-    expect(result.out).toContain("Stage:    One small server plus a managed database");
+    expect(result.out).toContain("Stage:    Managed hosting on the cheapest paid plan");
     expect(result.err).toBe("");
   });
 

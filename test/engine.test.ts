@@ -51,32 +51,38 @@ describe("fill", () => {
 
 describe("evaluate", () => {
   it("takes the first matching stage rule", () => {
-    const verdict = evaluate(profileOf({ framework: ["static"] }), rules);
-    expect(verdict.stage).toContain("Static hosting");
+    const verdict = evaluate(profileOf({ shape: ["static"] }), rules);
+    expect(verdict.stage).toContain("Free static hosting");
   });
 
   it("never reports more confidence than the signals it leaned on", () => {
-    const fields = { framework: ["express"], database: ["none"] };
-    const strong = evaluate(profileOf(fields, { framework: "high", database: "high" }), rules);
-    const weak = evaluate(profileOf(fields, { framework: "high", database: "low" }), rules);
+    const fields = { shape: ["service"], serverless_fit: ["fits"], payments: ["stripe"] };
+    const strong = evaluate(
+      profileOf(fields, { shape: "high", serverless_fit: "high", payments: "high" }),
+      rules,
+    );
+    const weak = evaluate(
+      profileOf(fields, { shape: "high", serverless_fit: "low", payments: "high" }),
+      rules,
+    );
     expect(strong.confidence).toBe("high");
     expect(weak.confidence).toBe("low");
     expect(weak.confidenceNote).toContain("Confidence: low.");
   });
 
   it("treats a signal it has no confidence for as low", () => {
-    expect(evaluate(profileOf({ framework: ["static"] }), rules).confidence).toBe("low");
+    expect(evaluate(profileOf({ shape: ["static"] }), rules).confidence).toBe("low");
   });
 
   it("says to do nothing when there is nothing to remove", () => {
-    const verdict = evaluate(profileOf({ framework: ["static"] }), rules);
+    const verdict = evaluate(profileOf({ shape: ["static"] }), rules);
     expect(verdict.flags).toEqual([]);
     expect(verdict.doNothingToday).toBe(true);
   });
 
   it("stops saying do nothing once a flag fires", () => {
     const verdict = evaluate(
-      profileOf({ framework: ["express"], database: ["none"], orchestration: ["kubernetes"], demand: ["none"] }),
+      profileOf({ shape: ["service"], serverless_fit: ["fits"], orchestration: ["kubernetes"], demand: ["none"] }),
       rules,
     );
     expect(verdict.flags).toHaveLength(1);
@@ -84,9 +90,17 @@ describe("evaluate", () => {
   });
 
   it("falls through to a plainly low confidence answer when nothing is recognized", () => {
-    const verdict = evaluate(profileOf({ framework: ["unknown"], language: ["none"] }), rules);
+    const verdict = evaluate(profileOf({ shape: ["unknown"], language: ["none"] }), rules);
     expect(verdict.confidence).toBe("low");
     expect(verdict.stage).toContain("could not tell");
+  });
+
+  it("never quotes a price for something that is not a service", () => {
+    for (const shape of ["notebook", "library", "cli"]) {
+      const verdict = evaluate(profileOf({ shape: [shape] }), rules);
+      expect(verdict.stage, shape).toContain("nothing to host here");
+      expect(verdict.stage, shape).not.toMatch(/\$/);
+    }
   });
 
   it("explains itself when no stage rule matches", () => {
@@ -115,6 +129,29 @@ describe("shipped rules", () => {
     for (const flag of rules.flags) {
       expect(flag.when["demand"]).toEqual(["none"]);
     }
+  });
+
+  // The first version of this file shipped prices that were invented. A price
+  // without a source is a guess, and a guess here is the whole product being
+  // wrong, so sourcing is enforced rather than trusted.
+  it("cites a source for every rule that quotes a dollar figure", () => {
+    const quotesMoney = (text: string): boolean => /\$\{?\w/.test(text);
+
+    for (const stage of rules.stages) {
+      const prose = [stage.stage, stage.headroom, stage.tripwire].join(" ");
+      if (!quotesMoney(prose)) continue;
+      expect(stage.scalars["source"], `stage "${stage.id}" quotes money`).toMatch(/read \d{4}-\d{2}-\d{2}/);
+    }
+
+    for (const flag of rules.flags) {
+      if (!quotesMoney(flag.text)) continue;
+      expect(flag.scalars["source"], `flag "${flag.id}" quotes money`).toMatch(/read \d{4}-\d{2}-\d{2}/);
+    }
+  });
+
+  it("starts the ladder at zero rather than at a rented server", () => {
+    const free = rules.stages.filter((stage) => stage.stage.includes("$0/mo"));
+    expect(free.length).toBeGreaterThanOrEqual(3);
   });
 });
 

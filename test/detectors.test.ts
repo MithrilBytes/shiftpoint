@@ -7,6 +7,9 @@ import { detectFramework } from "../src/detectors/framework.js";
 import { runDetectors } from "../src/detectors/index.js";
 import { detectJobs } from "../src/detectors/jobs.js";
 import { detectOrchestration } from "../src/detectors/orchestration.js";
+import { detectPayments } from "../src/detectors/payments.js";
+import { detectServerless } from "../src/detectors/serverless.js";
+import { detectShape } from "../src/detectors/shape.js";
 import { values, withRepo } from "./helpers.js";
 
 describe("framework", () => {
@@ -43,6 +46,16 @@ describe("framework", () => {
   it("does not call a templated HTML file a static site", () => {
     withRepo({ "requirements.txt": "Flask==3.0.3\n", "templates/index.html": "<h1>{{ x }}</h1>" }, (repo) => {
       expect(values(detectFramework(repo), "framework")).toEqual(["flask"]);
+    });
+  });
+
+  it("sees a language from source files when no manifest is checked in", () => {
+    // A virtual environment is not committed, so a real Python project can be
+    // one file and a .gitignore. Falling back to extensions keeps it visible.
+    withRepo({ "src/render.py": "print('hi')\n" }, (repo) => {
+      const language = detectFramework(repo).find((signal) => signal.kind === "language");
+      expect(language?.values).toEqual(["python"]);
+      expect(language?.confidence).toBe("medium");
     });
   });
 
@@ -186,6 +199,86 @@ describe("assets", () => {
   it("measures asset bytes and ignores source files", () => {
     withRepo({ "images/logo.svg": "x".repeat(500), "src/app.ts": "y".repeat(9000) }, (repo) => {
       expect(detectAssets(repo)[0]?.metric).toBe(500);
+    });
+  });
+});
+
+describe("shape", () => {
+  it("calls a repository with a web framework a service", () => {
+    withRepo({ "package.json": JSON.stringify({ dependencies: { express: "^4" } }) }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["service"]);
+    });
+  });
+
+  it("calls notebooks analysis, even when they are packaged", () => {
+    withRepo({ "requirements.txt": "pandas==2.2.2\n", "study.ipynb": '{"cells":[]}' }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["notebook"]);
+    });
+  });
+
+  it("calls a bin entry a command line tool", () => {
+    withRepo({ "package.json": JSON.stringify({ bin: { thing: "./cli.js" } }), "cli.js": "" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["cli"]);
+    });
+  });
+
+  it("calls a published entry point a library", () => {
+    withRepo({ "package.json": JSON.stringify({ main: "index.js" }), "index.js": "" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["library"]);
+    });
+  });
+
+  it("calls a loose source file a script", () => {
+    withRepo({ "src/report.py": "print('hi')\n" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["script"]);
+    });
+  });
+});
+
+describe("serverless fit", () => {
+  it("fits when nothing needs to outlive a request", () => {
+    withRepo({ "package.json": JSON.stringify({ dependencies: { express: "^4" } }) }, (repo) => {
+      expect(values(detectServerless(repo), "serverless_fit")).toEqual(["fits"]);
+    });
+  });
+
+  it("is blocked by background work", () => {
+    withRepo({ Gemfile: 'gem "sidekiq"\n' }, (repo) => {
+      const signal = detectServerless(repo)[0];
+      expect(signal?.values).toEqual(["blocked"]);
+      expect(signal?.evidence).toContain("keeps running");
+    });
+  });
+
+  it("is blocked by held open connections", () => {
+    withRepo({ "package.json": JSON.stringify({ dependencies: { "socket.io": "^4" } }) }, (repo) => {
+      expect(detectServerless(repo)[0]?.evidence).toContain("holds connections open");
+    });
+  });
+
+  it("is blocked by a local file database", () => {
+    withRepo({ "requirements.txt": "Flask==3.0.3\n", "app.py": "import sqlite3\n" }, (repo) => {
+      expect(detectServerless(repo)[0]?.evidence).toContain("disk that persists");
+    });
+  });
+
+  it("is blocked by a runtime too heavy to cold start", () => {
+    withRepo({ "requirements.txt": "torch==2.3.0\n" }, (repo) => {
+      expect(detectServerless(repo)[0]?.evidence).toContain("cold start");
+    });
+  });
+});
+
+describe("payments", () => {
+  it("finds a payment processor, which decides free tier eligibility", () => {
+    withRepo({ "package.json": JSON.stringify({ dependencies: { stripe: "^15" } }) }, (repo) => {
+      expect(values(detectPayments(repo), "payments")).toEqual(["stripe"]);
+    });
+  });
+
+  it("reports no processor as none", () => {
+    withRepo({ "package.json": JSON.stringify({ dependencies: { next: "^14" } }) }, (repo) => {
+      expect(values(detectPayments(repo), "payments")).toEqual(["none"]);
     });
   });
 });
