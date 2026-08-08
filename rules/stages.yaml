@@ -1,0 +1,110 @@
+# Capacity priors and price points.
+#
+# Every number a founder sees comes from this file. The engine contains no
+# numbers of its own, so updating a price is a one line change.
+#
+# Prices are US dollars per month and assume a mainstream provider
+# (DigitalOcean, Hetzner, Fly, Render, Railway) at list price.
+#
+# Prose fields may reference any scalar field on the same rule with {braces}.
+version: 1
+updated: "2026-08-04"
+
+# First match wins. Rules run from most specific to least specific.
+stages:
+  - id: static-site
+    when:
+      framework: [static]
+    cost_low: 0
+    cost_high: 5
+    daily_visitors: 25k
+    next_tier_cost: 12
+    confidence: high
+    stage: "Static hosting is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "This stack typically serves ~{daily_visitors} daily visitors at this tier"
+    tripwire: "If you add a login, a database, or anything that saves what visitors type, revisit. The first paid step up is about ${next_tier_cost}/mo."
+
+  - id: app-with-background-work
+    when:
+      jobs:
+        [
+          sidekiq,
+          resque,
+          delayed_job,
+          good_job,
+          solid_queue,
+          celery,
+          rq,
+          dramatiq,
+          huey,
+          bullmq,
+          bull,
+          agenda,
+        ]
+    cost_low: 45
+    cost_high: 70
+    daily_users: 10k
+    next_tier_cost: 120
+    confidence: medium
+    stage: "One server for the app and one for background work, plus a managed database (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "This stack typically serves ~{daily_users} daily users at this tier"
+    tripwire: "If background work starts backing up overnight, or your daily users pass ~{daily_users}, revisit. Next tier is ~${next_tier_cost}/mo."
+
+  - id: app-with-managed-database
+    when:
+      framework: [nextjs, express, flask, django, rails]
+      database: [postgres, mysql, mongo]
+    cost_low: 19
+    cost_high: 29
+    daily_users: 5k
+    bandwidth_gb: 100
+    next_tier_cost: 60
+    confidence: high
+    stage: "One small server plus a managed database is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "This stack typically serves ~{daily_users} daily users at this tier"
+    tripwire: "If you add background jobs or exceed ~{bandwidth_gb}GB/mo bandwidth, revisit. Next tier is ~${next_tier_cost}/mo."
+
+  - id: app-with-file-database
+    when:
+      framework: [nextjs, express, flask, django, rails]
+      database: [sqlite]
+    cost_low: 6
+    cost_high: 12
+    daily_users: 1k
+    next_tier_cost: 15
+    confidence: high
+    stage: "A single small server is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "This stack typically serves ~{daily_users} daily users at this tier"
+    tripwire: "If you need a second server, or more than one writer at the same time, the single file database becomes the limit. A managed database is about ${next_tier_cost}/mo."
+
+  - id: app-without-database
+    when:
+      framework: [nextjs, express, flask, django, rails]
+      database: [none]
+    cost_low: 12
+    cost_high: 20
+    daily_users: 5k
+    bandwidth_gb: 50
+    next_tier_cost: 40
+    confidence: high
+    stage: "Single small VPS is sufficient (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "This stack typically serves ~{daily_users} daily users at this tier"
+    tripwire: "If you add background jobs or exceed ~{bandwidth_gb}GB/mo bandwidth, revisit. Next tier is ~${next_tier_cost}/mo."
+
+  - id: known-language-only
+    when:
+      language: [node, python, ruby, go]
+    cost_low: 6
+    cost_high: 12
+    next_tier_cost: 25
+    confidence: low
+    stage: "A single small server is the safe starting point (est. ${cost_low}-{cost_high}/mo)"
+    headroom: "We could not tell how much traffic this stack handles, so treat any number here as a guess"
+    tripwire: "Once this is running somewhere, revisit with real numbers. The next step up is about ${next_tier_cost}/mo."
+
+  - id: unknown
+    when: {}
+    confidence: low
+    stage: "We could not tell what this repository runs, so we cannot price it"
+    headroom: "No headroom estimate. There was not enough in this repository to base one on."
+    tripwire: "Add a dependency file (package.json, requirements.txt, Gemfile, go.mod) and run this again."

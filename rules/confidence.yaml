@@ -1,0 +1,9 @@
+# The sentence printed under every verdict. Low confidence is stated plainly
+# rather than papered over with a guess.
+version: 1
+updated: "2026-08-04"
+
+notes:
+  high: "Confidence: high. The files in this repository point clearly at this answer."
+  medium: "Confidence: medium. Some of this is inferred from what the repository does not contain."
+  low: "Confidence: low. There was not enough in this repository to be sure. Treat this as a starting point, not an answer."

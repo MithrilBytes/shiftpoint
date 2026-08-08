@@ -1,0 +1,16 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 960 420" role="img" aria-label="A row of glazed bowls">
+  <rect width="960" height="420" fill="#efe6d8" />
+  <rect y="300" width="960" height="120" fill="#e0d3bf" />
+  <g fill="#a8623c">
+    <path d="M120 300c0-52 34-88 80-88s80 36 80 88z" />
+    <path d="M330 300c0-40 26-68 62-68s62 28 62 68z" opacity="0.85" />
+    <path d="M500 300c0-62 40-104 94-104s94 42 94 104z" opacity="0.7" />
+    <path d="M730 300c0-34 22-58 52-58s52 24 52 58z" opacity="0.9" />
+  </g>
+  <g fill="#241f1c" opacity="0.35">
+    <ellipse cx="200" cy="300" rx="80" ry="8" />
+    <ellipse cx="392" cy="300" rx="62" ry="7" />
+    <ellipse cx="594" cy="300" rx="94" ry="9" />
+    <ellipse cx="782" cy="300" rx="52" ry="6" />
+  </g>
+</svg>

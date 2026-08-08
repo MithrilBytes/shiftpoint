@@ -1,0 +1,8 @@
+# Thresholds used when turning raw detector signals into a profile.
+version: 1
+updated: "2026-08-04"
+
+thresholds:
+  # Total bytes of images, video, and fonts checked into the repository, above
+  # which it counts as static heavy and bandwidth starts to drive the bill.
+  static_heavy_bytes: 26214400

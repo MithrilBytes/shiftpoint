@@ -1,0 +1,57 @@
+:root {
+  --ink: #241f1c;
+  --paper: #f6f1e8;
+  --clay: #a8623c;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  padding: 2rem 1.25rem;
+  max-width: 44rem;
+  margin-inline: auto;
+  font: 1rem/1.6 Georgia, "Times New Roman", serif;
+  color: var(--ink);
+  background: var(--paper);
+}
+
+header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 2.5rem;
+}
+
+nav a {
+  color: var(--clay);
+  margin-left: 1rem;
+  text-decoration: none;
+}
+
+nav a:hover {
+  text-decoration: underline;
+}
+
+h1 {
+  font-size: 1.75rem;
+  line-height: 1.25;
+  font-weight: normal;
+}
+
+.hero {
+  width: 100%;
+  height: auto;
+  border-radius: 2px;
+  margin-bottom: 1.5rem;
+}
+
+footer {
+  margin-top: 4rem;
+  padding-top: 1rem;
+  border-top: 1px solid rgba(36, 31, 28, 0.15);
+  font-size: 0.875rem;
+}

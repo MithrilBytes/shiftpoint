@@ -1,0 +1,25 @@
+# Downward detection: spend and complexity the repository shows no demand for.
+#
+# A flag only fires when the repository carries the cost AND shows no demand
+# signal behind it. Demand comes from what the application does (background
+# work, more than one service, heavy static assets), never from what the
+# deployment configuration asks for. A replica count of 50 is an intention,
+# not a demand signal.
+#
+# Prose fields may reference any scalar field on the same rule with {braces}.
+version: 1
+updated: "2026-08-04"
+
+flags:
+  - id: kubernetes-without-demand
+    when:
+      orchestration: [kubernetes]
+      demand: [none]
+    monthly_cost: 70
+    text: "Found Kubernetes manifests. Adds ~${monthly_cost}/mo and ops burden with no signal you need it yet."
+
+  - id: helm-without-demand
+    when:
+      orchestration: [helm]
+      demand: [none]
+    text: "Found a Helm chart. It manages releases across a fleet of services, and this repository holds one."

@@ -1,0 +1,42 @@
+{
+  "name": "shiftpoint",
+  "version": "0.1.0",
+  "description": "Statically analyze a repository and report the infrastructure it actually needs.",
+  "license": "MIT",
+  "type": "module",
+  "bin": {
+    "shiftpoint": "dist/cli.js"
+  },
+  "files": [
+    "dist"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "keywords": [
+    "infrastructure",
+    "cost",
+    "static-analysis",
+    "cli",
+    "offline"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/MithrilBytes/shiftpoint.git"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json && node scripts/postbuild.mjs",
+    "test": "vitest run",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "check:dashes": "node scripts/check-dashes.mjs",
+    "prepublishOnly": "npm run build"
+  },
+  "dependencies": {
+    "yaml": "^2.4.5"
+  },
+  "devDependencies": {
+    "@types/node": "^20.14.0",
+    "typescript": "^5.5.0",
+    "vitest": "^3.2.7"
+  }
+}

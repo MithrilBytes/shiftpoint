@@ -1,0 +1,29 @@
+services:
+  web:
+    build: .
+    command: bundle exec puma -C config/puma.rb
+    ports:
+      - "3000:3000"
+    depends_on:
+      - db
+      - redis
+
+  worker:
+    build: .
+    command: bundle exec sidekiq -C config/sidekiq.yml
+    depends_on:
+      - db
+      - redis
+
+  db:
+    image: postgres:16
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    environment:
+      POSTGRES_PASSWORD: dispatch
+
+  redis:
+    image: redis:7
+
+volumes:
+  pgdata:

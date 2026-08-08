@@ -1,0 +1,20 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>Links</title>
+  </head>
+  <body>
+    <h1>Links</h1>
+    <ul>
+      {% for link in links %}
+      <li><a href="{{ link.url }}">{{ link.title }}</a></li>
+      {% endfor %}
+    </ul>
+    <form method="post" action="/add">
+      <input name="url" placeholder="https://" />
+      <input name="title" placeholder="Title" />
+      <button type="submit">Add</button>
+    </form>
+  </body>
+</html>
