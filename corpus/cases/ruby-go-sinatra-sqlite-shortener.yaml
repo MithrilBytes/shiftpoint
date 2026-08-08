@@ -1,0 +1,36 @@
+id: ruby-go-sinatra-sqlite-shortener
+origin: "A one file Sinatra link shortener keeping its links in a SQLite file next to the app. The classic small Ruby service."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "sinatra", "~> 4.0"
+    gem "rackup"
+    gem "puma"
+    gem "sqlite3"
+  app.rb: |
+    require "sinatra"
+    require "sqlite3"
+
+    DB = SQLite3::Database.new("links.db")
+
+    get "/:slug" do
+      row = DB.get_first_row("select url from links where slug = ?", params[:slug])
+      halt 404 unless row
+      redirect row[0]
+    end
+
+    post "/links" do
+      DB.execute("insert into links (slug, url) values (?, ?)", [params[:slug], params[:url]])
+      status 201
+    end
+  config.ru: |
+    require "./app"
+    run Sinatra::Application
+  db/schema.sql: |
+    create table if not exists links (
+      slug text primary key,
+      url text not null
+    );

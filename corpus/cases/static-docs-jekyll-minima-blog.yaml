@@ -1,0 +1,42 @@
+id: static-docs-jekyll-minima-blog
+origin: "A personal Jekyll blog on the minima theme, built locally and pushed to GitHub Pages. The default output of `jekyll new`."
+expect:
+  stage: static-site
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "jekyll", "~> 4.3"
+    gem "minima", "~> 2.5"
+
+    group :jekyll_plugins do
+      gem "jekyll-feed"
+      gem "jekyll-seo-tag"
+    end
+  _config.yml: |
+    title: Notes from a Slow Workshop
+    description: Woodworking, mostly hand tools.
+    theme: minima
+    plugins:
+      - jekyll-feed
+      - jekyll-seo-tag
+  index.md: |
+    ---
+    layout: home
+    ---
+  about.md: |
+    ---
+    layout: page
+    title: About
+    permalink: /about/
+    ---
+
+    I make furniture in a garage in Sheffield and write about it here.
+  _posts/2026-01-14-sharpening.md: |
+    ---
+    layout: post
+    title: "Sharpening, again"
+    ---
+
+    Every year I decide I have finally settled on a sharpening routine.

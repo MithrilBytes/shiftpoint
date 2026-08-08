@@ -1,0 +1,67 @@
+id: awkward-phoenix-liveview-postgres
+origin: "An Elixir Phoenix application with LiveView and Ecto on Postgres, which is an ordinary shape for a small product team. LiveView holds a websocket open for every visitor, so this needs a process that stays up, and Ecto points at a real Postgres."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  mix.exs: |
+    defmodule Atlas.MixProject do
+      use Mix.Project
+
+      def project do
+        [app: :atlas, version: "0.3.0", elixir: "~> 1.16", deps: deps()]
+      end
+
+      def application do
+        [mod: {Atlas.Application, []}, extra_applications: [:logger]]
+      end
+
+      defp deps do
+        [
+          {:phoenix, "~> 1.7.14"},
+          {:phoenix_live_view, "~> 0.20.17"},
+          {:ecto_sql, "~> 3.11"},
+          {:postgrex, ">= 0.0.0"},
+          {:bandit, "~> 1.5"}
+        ]
+      end
+    end
+  config/runtime.exs: |
+    import Config
+
+    if config_env() == :prod do
+      config :atlas, Atlas.Repo,
+        url: System.fetch_env!("DATABASE_URL"),
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+
+      config :atlas, AtlasWeb.Endpoint,
+        http: [port: String.to_integer(System.get_env("PORT") || "4000")],
+        secret_key_base: System.fetch_env!("SECRET_KEY_BASE")
+    end
+  lib/atlas/repo.ex: |
+    defmodule Atlas.Repo do
+      use Ecto.Repo, otp_app: :atlas, adapter: Ecto.Adapters.Postgres
+    end
+  lib/atlas_web/router.ex: |
+    defmodule AtlasWeb.Router do
+      use AtlasWeb, :router
+
+      scope "/", AtlasWeb do
+        pipe_through :browser
+        live "/boards/:id", BoardLive
+      end
+    end
+  lib/atlas_web/live/board_live.ex: |
+    defmodule AtlasWeb.BoardLive do
+      use AtlasWeb, :live_view
+
+      def mount(%{"id" => id}, _session, socket) do
+        if connected?(socket), do: Phoenix.PubSub.subscribe(Atlas.PubSub, "board:#{id}")
+        {:ok, assign(socket, board: Atlas.Boards.get!(id))}
+      end
+    end
+  README.md: |
+    # atlas
+
+    Phoenix 1.7 with LiveView. `mix phx.server` to run, Postgres 16 expected at
+    `DATABASE_URL`. Deployed as a release behind a load balancer.

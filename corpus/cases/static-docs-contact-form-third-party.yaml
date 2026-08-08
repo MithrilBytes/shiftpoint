@@ -1,0 +1,49 @@
+id: static-docs-contact-form-third-party
+origin: "A hand written marketing site whose only interactive piece is a contact form that POSTs to Formspree. The form handler is somebody else's service, so the repository itself still has no server side."
+expect:
+  stage: static-site
+  flags: []
+files:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Rowan Tree Surveying</title>
+        <link rel="stylesheet" href="css/site.css" />
+      </head>
+      <body>
+        <h1>Rowan Tree Surveying</h1>
+        <p>Boundary and topographic surveys across the Borders.</p>
+        <a href="contact.html">Get a quote</a>
+      </body>
+    </html>
+  contact.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Contact</title>
+        <link rel="stylesheet" href="css/site.css" />
+      </head>
+      <body>
+        <h1>Contact</h1>
+        <form action="https://formspree.io/f/mwkgvzab" method="POST">
+          <label>Your email <input type="email" name="email" required /></label>
+          <label>Message <textarea name="message" required></textarea></label>
+          <button type="submit">Send</button>
+        </form>
+      </body>
+    </html>
+  services.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Services</title></head>
+      <body>
+        <h1>Services</h1>
+        <ul><li>Boundary surveys</li><li>Topographic surveys</li><li>Setting out</li></ul>
+      </body>
+    </html>
+  css/site.css: |
+    body { font-family: system-ui, sans-serif; max-width: 42rem; margin: 3rem auto; }
+    form label { display: block; margin-bottom: 1rem; }

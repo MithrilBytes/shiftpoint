@@ -1,0 +1,42 @@
+id: python-django-postgres
+origin: "Plain Django site on managed Postgres, no worker, the default result of django-admin startproject plus one app."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.7
+    psycopg[binary]==3.2.1
+    gunicorn==22.0.0
+  manage.py: |
+    import os
+    import sys
+    from django.core.management import execute_from_command_line
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+        execute_from_command_line(sys.argv)
+  config/settings.py: |
+    import os
+
+    INSTALLED_APPS = ["django.contrib.admin", "django.contrib.auth", "catalog"]
+    ROOT_URLCONF = "config.urls"
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ.get("PGDATABASE", "catalog"),
+            "HOST": os.environ.get("PGHOST", "localhost"),
+        }
+    }
+  catalog/models.py: |
+    from django.db import models
+
+    class Product(models.Model):
+        name = models.CharField(max_length=120)
+        price_cents = models.IntegerField()
+  config/urls.py: |
+    from django.contrib import admin
+    from django.urls import path
+
+    urlpatterns = [path("admin/", admin.site.urls)]

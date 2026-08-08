@@ -1,0 +1,80 @@
+id: infra-overkill-go-api-k8s-and-helm
+origin: >-
+  A single Go chi API. The team started with hand written manifests in deploy/,
+  then moved to Helm and never deleted the originals, so the repository now
+  carries both. Nothing about the application changed.
+expect:
+  stage: app-on-free-managed-hosting
+  flags:
+    - kubernetes-without-demand
+    - helm-without-demand
+files:
+  go.mod: |
+    module github.com/example/linkcheck
+
+    go 1.22
+
+    require github.com/go-chi/chi/v5 v5.0.12
+  main.go: |
+    package main
+
+    import (
+    	"net/http"
+
+    	"github.com/go-chi/chi/v5"
+    )
+
+    func main() {
+    	r := chi.NewRouter()
+    	r.Get("/check", func(w http.ResponseWriter, req *http.Request) {
+    		w.Write([]byte(`{"ok":true}`))
+    	})
+    	http.ListenAndServe(":8080", r)
+    }
+  deploy/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: linkcheck
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: linkcheck
+      template:
+        metadata:
+          labels:
+            app: linkcheck
+        spec:
+          containers:
+            - name: linkcheck
+              image: ghcr.io/example/linkcheck:latest
+  deploy/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: linkcheck
+    spec:
+      selector:
+        app: linkcheck
+      ports:
+        - port: 80
+          targetPort: 8080
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: linkcheck
+    type: application
+    version: 0.1.0
+    appVersion: "0.3.0"
+  chart/values.yaml: |
+    image:
+      repository: ghcr.io/example/linkcheck
+      tag: "0.3.0"
+    replicaCount: 2
+    service:
+      port: 80
+  README.md: |
+    # linkcheck
+
+    HTTP link checker API. Deployed with the chart in `chart/`. The manifests in
+    `deploy/` are the old path and are kept until the migration is finished.

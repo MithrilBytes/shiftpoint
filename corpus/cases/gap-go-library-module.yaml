@@ -1,0 +1,87 @@
+id: gap-go-library-module
+origin: "A Go module published for other modules to import: a rate limiter with no main package and no dependencies outside the standard library, which is what most Go libraries look like. Consumers run go get; nothing here is ever deployed."
+expect:
+  stage: library
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/leaky
+
+    go 1.22
+  doc.go: |
+    // Package leaky implements a leaky bucket rate limiter safe for concurrent
+    // use. It allocates nothing per call and keeps no goroutines of its own.
+    package leaky
+  bucket.go: |
+    package leaky
+
+    import (
+    	"sync"
+    	"time"
+    )
+
+    // Bucket admits at most Rate events per Interval.
+    type Bucket struct {
+    	Rate     int
+    	Interval time.Duration
+
+    	mu     sync.Mutex
+    	level  int
+    	filled time.Time
+    }
+
+    // Allow reports whether one event may proceed now.
+    func (b *Bucket) Allow() bool {
+    	b.mu.Lock()
+    	defer b.mu.Unlock()
+
+    	now := time.Now()
+    	if drained := int(now.Sub(b.filled) / b.Interval * time.Duration(b.Rate)); drained > 0 {
+    		b.level = max(0, b.level-drained)
+    		b.filled = now
+    	}
+    	if b.level >= b.Rate {
+    		return false
+    	}
+    	b.level++
+    	return true
+    }
+  bucket_test.go: |
+    package leaky
+
+    import (
+    	"testing"
+    	"time"
+    )
+
+    func TestAllowStopsAtRate(t *testing.T) {
+    	b := &Bucket{Rate: 2, Interval: time.Second}
+    	if !b.Allow() || !b.Allow() {
+    		t.Fatal("first two should be allowed")
+    	}
+    	if b.Allow() {
+    		t.Fatal("third should be refused")
+    	}
+    }
+  example_test.go: |
+    package leaky_test
+
+    import (
+    	"fmt"
+    	"time"
+
+    	"github.com/example/leaky"
+    )
+
+    func ExampleBucket_Allow() {
+    	b := &leaky.Bucket{Rate: 1, Interval: time.Minute}
+    	fmt.Println(b.Allow(), b.Allow())
+    	// Output: true false
+    }
+  README.md: |
+    # leaky
+
+    `go get github.com/example/leaky`
+
+    A leaky bucket. No dependencies, no goroutines, no clock injection: pass a
+    Bucket around and call Allow.

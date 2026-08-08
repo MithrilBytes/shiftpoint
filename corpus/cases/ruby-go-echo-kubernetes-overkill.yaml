@@ -1,0 +1,62 @@
+id: ruby-go-echo-kubernetes-overkill
+origin: "A single stateless Echo service with a full Kubernetes deployment, service, and ingress checked in. A very common outcome of following a tutorial: the manifests arrived before the traffic did."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [kubernetes-without-demand]
+files:
+  go.mod: |
+    module github.com/example/geocode
+
+    go 1.22
+
+    require github.com/labstack/echo/v4 v4.12.0
+  main.go: |
+    package main
+
+    import "github.com/labstack/echo/v4"
+
+    func main() {
+    	e := echo.New()
+    	e.GET("/geocode", geocode)
+    	e.Logger.Fatal(e.Start(":8080"))
+    }
+  deploy/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: geocode
+    spec:
+      replicas: 6
+      template:
+        spec:
+          containers:
+            - name: geocode
+              image: example/geocode:latest
+  deploy/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: geocode
+    spec:
+      selector:
+        app: geocode
+      ports:
+        - port: 80
+          targetPort: 8080
+  deploy/ingress.yaml: |
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: geocode
+    spec:
+      rules:
+        - host: geocode.example.com
+  Dockerfile: |
+    FROM golang:1.22 AS build
+    WORKDIR /src
+    COPY . .
+    RUN go build -o /out/geocode .
+
+    FROM gcr.io/distroless/static-debian12
+    COPY --from=build /out/geocode /geocode
+    ENTRYPOINT ["/geocode"]

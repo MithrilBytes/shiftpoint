@@ -1,0 +1,51 @@
+id: gap-express-mongo-api
+origin: "An Express recipe API on MongoDB via Mongoose, the MEAN stack shape that a decade of tutorials produced and that people still start from. Stateless request handling, all state in Atlas."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "pantry-api",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "mongoose": "^8.5.1"
+      }
+    }
+  src/server.js: |
+    import express from "express";
+    import mongoose from "mongoose";
+    import recipes from "./routes/recipes.js";
+
+    await mongoose.connect(process.env.MONGODB_URI);
+
+    const app = express();
+    app.use(express.json());
+    app.use("/recipes", recipes);
+    app.listen(process.env.PORT ?? 3000);
+  src/models/recipe.js: |
+    import mongoose from "mongoose";
+
+    export const Recipe = mongoose.model(
+      "Recipe",
+      new mongoose.Schema({
+        title: { type: String, required: true },
+        minutes: Number,
+        ingredients: [String],
+      }),
+    );
+  src/routes/recipes.js: |
+    import { Router } from "express";
+    import { Recipe } from "../models/recipe.js";
+
+    const router = Router();
+
+    router.get("/", async (_req, res) => res.json(await Recipe.find().limit(50)));
+    router.post("/", async (req, res) => res.status(201).json(await Recipe.create(req.body)));
+
+    export default router;
+  .env.example: |
+    MONGODB_URI=mongodb+srv://user:password@cluster0.example.mongodb.net/pantry

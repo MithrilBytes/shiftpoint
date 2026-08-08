@@ -1,0 +1,93 @@
+id: infra-overkill-static-site-on-kubernetes
+origin: >-
+  A hand written marketing site, three files of HTML and CSS, packaged into an
+  nginx image and deployed to the company cluster because that is the only
+  deploy path anyone has permission to use.
+expect:
+  stage: static-site
+  flags:
+    - kubernetes-without-demand
+files:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Fernwood Joinery</title>
+        <link rel="stylesheet" href="css/site.css" />
+      </head>
+      <body>
+        <h1>Fernwood Joinery</h1>
+        <p>Hand cut staircases since 1998.</p>
+        <a href="about.html">About us</a>
+      </body>
+    </html>
+  about.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>About</title>
+        <link rel="stylesheet" href="css/site.css" />
+      </head>
+      <body>
+        <h1>About</h1>
+        <p>Two people and a workshop in Devon.</p>
+      </body>
+    </html>
+  css/site.css: |
+    body {
+      font-family: Georgia, serif;
+      max-width: 40rem;
+      margin: 4rem auto;
+    }
+  Dockerfile: |
+    FROM nginx:alpine
+    COPY . /usr/share/nginx/html
+  k8s/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: fernwood-site
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: fernwood-site
+      template:
+        metadata:
+          labels:
+            app: fernwood-site
+        spec:
+          containers:
+            - name: nginx
+              image: registry.internal/fernwood-site:latest
+              ports:
+                - containerPort: 80
+  k8s/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: fernwood-site
+    spec:
+      selector:
+        app: fernwood-site
+      ports:
+        - port: 80
+  k8s/ingress.yaml: |
+    apiVersion: networking.k8s.io/v1
+    kind: Ingress
+    metadata:
+      name: fernwood-site
+    spec:
+      rules:
+        - host: fernwoodjoinery.example.com
+          http:
+            paths:
+              - path: /
+                pathType: Prefix
+                backend:
+                  service:
+                    name: fernwood-site
+                    port:
+                      number: 80

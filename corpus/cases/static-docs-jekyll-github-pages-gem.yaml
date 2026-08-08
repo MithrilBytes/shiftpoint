@@ -1,0 +1,39 @@
+id: static-docs-jekyll-github-pages-gem
+origin: "A Jekyll site set up the way GitHub Pages documents it: the github-pages gem pins the whole toolchain, so the Gemfile never names Jekyll directly. This is the majority of Jekyll sites in the wild."
+expect:
+  stage: static-site
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "github-pages", group: :jekyll_plugins
+    gem "webrick"
+  _config.yml: |
+    title: Harbour Ward Residents Association
+    description: Meeting minutes, planning notices, and how to get involved.
+    theme: jekyll-theme-cayman
+    baseurl: ""
+  index.md: |
+    ---
+    layout: default
+    title: Home
+    ---
+
+    # Harbour Ward Residents Association
+
+    We meet on the first Thursday of the month at the library.
+  minutes.md: |
+    ---
+    layout: default
+    title: Minutes
+    ---
+
+    Minutes are posted within a week of each meeting.
+  _posts/2026-02-05-planning-notice.md: |
+    ---
+    layout: post
+    title: "Planning notice: 14 Quay Street"
+    ---
+
+    Comments to the council close on 3 March.

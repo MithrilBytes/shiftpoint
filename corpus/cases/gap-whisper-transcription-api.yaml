@@ -1,0 +1,42 @@
+id: gap-whisper-transcription-api
+origin: "A FastAPI endpoint that transcribes uploaded audio with Whisper running locally on torch. The model weights are loaded into memory at startup, so what this needs is decided by which Whisper size you picked, not by how many people upload."
+expect:
+  stage: model-runtime
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn[standard]==0.30.1
+    torch==2.4.0
+    faster-whisper==1.0.3
+    python-multipart==0.0.9
+  main.py: |
+    import tempfile
+    from fastapi import FastAPI, UploadFile
+    from faster_whisper import WhisperModel
+
+    model = WhisperModel("medium", device="cuda", compute_type="float16")
+    app = FastAPI()
+
+    @app.post("/transcribe")
+    async def transcribe(audio: UploadFile):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as handle:
+            handle.write(await audio.read())
+            handle.flush()
+            segments, info = model.transcribe(handle.name, beam_size=5)
+        return {
+            "language": info.language,
+            "text": " ".join(segment.text for segment in segments),
+        }
+  Dockerfile: |
+    FROM nvidia/cuda:12.4.1-runtime-ubuntu22.04
+    RUN apt-get update && apt-get install -y python3-pip ffmpeg
+    COPY requirements.txt .
+    RUN pip3 install -r requirements.txt
+    COPY main.py .
+    CMD ["uvicorn", "main:app", "--host", "0.0.0.0"]
+  README.md: |
+    # scribe
+
+    Transcription over HTTP. The `medium` model wants about 5 GB of VRAM;
+    `small` fits in 2 GB if the box you have is smaller.

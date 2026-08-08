@@ -1,0 +1,53 @@
+id: awkward-dotfiles
+origin: "A personal dotfiles repository: shell configuration, a Neovim config, a Brewfile, and a symlink script. Millions of these exist. Nothing in it is a program anyone deploys, and the only machine it ever runs on is the owner's laptop."
+expect:
+  stage: unknown
+  flags: []
+files:
+  install.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    here="$(cd "$(dirname "$0")" && pwd)"
+    for file in zsh/.zshrc git/.gitconfig tmux/.tmux.conf; do
+      ln -sfn "$here/$file" "$HOME/$(basename "$file")"
+    done
+    mkdir -p "$HOME/.config"
+    ln -sfn "$here/nvim" "$HOME/.config/nvim"
+  zsh/.zshrc: |
+    export EDITOR=nvim
+    export PATH="$HOME/.local/bin:$PATH"
+
+    alias gs='git status -sb'
+    alias ll='ls -lah'
+
+    autoload -Uz compinit && compinit
+  git/.gitconfig: |
+    [user]
+      name = Sam Ferreira
+      email = sam@example.org
+    [init]
+      defaultBranch = main
+    [pull]
+      rebase = true
+  tmux/.tmux.conf: |
+    set -g prefix C-a
+    set -g mouse on
+    set -g base-index 1
+    bind - split-window -v
+  nvim/init.lua: |
+    vim.g.mapleader = " "
+    vim.opt.number = true
+    vim.opt.expandtab = true
+    vim.opt.shiftwidth = 2
+
+    require("config.lazy")
+  Brewfile: |
+    brew "fzf"
+    brew "ripgrep"
+    brew "neovim"
+    cask "ghostty"
+  README.md: |
+    # dotfiles
+
+    `./install.sh` symlinks everything into place. Tested on macOS and Debian.

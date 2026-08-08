@@ -1,0 +1,36 @@
+id: ruby-go-jekyll-portfolio
+origin: "A Jekyll portfolio built by GitHub Pages from a Gemfile and a handful of Markdown files. No index.html is checked in, because Jekyll generates it from index.md."
+expect:
+  stage: static-site
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "jekyll", "~> 4.3"
+    gem "minima", "~> 2.5"
+    gem "jekyll-seo-tag"
+    gem "jekyll-feed"
+  _config.yml: |
+    title: Field Notes
+    theme: minima
+    plugins:
+      - jekyll-seo-tag
+      - jekyll-feed
+  index.md: |
+    ---
+    layout: home
+    title: Field Notes
+    ---
+
+    Notes on bridges, mostly.
+  _posts/2026-02-11-cable-stays.md: |
+    ---
+    layout: post
+    title: Cable stays
+    ---
+
+    A short piece about cable stayed spans.
+  assets/css/style.scss: |
+    ---
+    ---
+    @import "minima";

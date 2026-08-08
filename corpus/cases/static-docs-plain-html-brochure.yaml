@@ -1,0 +1,41 @@
+id: static-docs-plain-html-brochure
+origin: "A neighbourhood restaurant's brochure site. Three hand written HTML pages and one stylesheet, no build step, the shape a small business site has had since 1999."
+expect:
+  stage: static-site
+  flags: []
+files:
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Calderwood Tavern</title>
+        <link rel="stylesheet" href="css/site.css" />
+      </head>
+      <body>
+        <h1>Calderwood Tavern</h1>
+        <p>Wood fired pizza and a short beer list, on Dundas Street.</p>
+        <nav><a href="menu.html">Menu</a> <a href="hours.html">Hours</a></nav>
+      </body>
+    </html>
+  menu.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Menu</title></head>
+      <body>
+        <h1>Menu</h1>
+        <ul><li>Margherita</li><li>Fennel sausage</li><li>Mushroom</li></ul>
+      </body>
+    </html>
+  hours.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Hours</title></head>
+      <body>
+        <h1>Hours</h1>
+        <p>Wednesday to Sunday, 5pm until late. Closed Monday and Tuesday.</p>
+      </body>
+    </html>
+  css/site.css: |
+    body { font-family: Georgia, serif; max-width: 40rem; margin: 3rem auto; }
+    nav a { margin-right: 1rem; }

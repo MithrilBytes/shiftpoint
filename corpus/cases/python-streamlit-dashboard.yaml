@@ -1,0 +1,35 @@
+id: python-streamlit-dashboard
+origin: "Streamlit dashboard over a checked-in CSV, shared with a team by URL. Streamlit holds a websocket session per viewer, so the process has to stay up."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    streamlit==1.37.0
+    pandas==2.2.2
+    altair==5.3.0
+  app.py: |
+    import altair as alt
+    import pandas as pd
+    import streamlit as st
+
+    st.title("Support volume")
+
+    tickets = pd.read_csv("data/tickets.csv", parse_dates=["opened_at"])
+    team = st.selectbox("Team", sorted(tickets["team"].unique()))
+    filtered = tickets[tickets["team"] == team]
+
+    st.metric("Open tickets", len(filtered))
+    st.altair_chart(
+        alt.Chart(filtered).mark_line().encode(x="opened_at", y="count()"),
+        use_container_width=True,
+    )
+  data/tickets.csv: |
+    team,opened_at
+    billing,2026-07-01
+    billing,2026-07-02
+    platform,2026-07-02
+  .streamlit/config.toml: |
+    [server]
+    headless = true
+    port = 8501

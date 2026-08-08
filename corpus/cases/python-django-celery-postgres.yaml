@@ -1,0 +1,43 @@
+id: python-django-celery-postgres
+origin: "Django app with a Celery worker on Redis for invoice emails, the standard Python answer to work that must not happen in the request."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.7
+    celery==5.4.0
+    redis==5.0.7
+    psycopg[binary]==3.2.1
+    gunicorn==22.0.0
+  config/settings.py: |
+    import os
+
+    INSTALLED_APPS = ["django.contrib.auth", "billing"]
+    CELERY_BROKER_URL = os.environ.get("REDIS_URL", "redis://localhost:6379/0")
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": "billing",
+            "HOST": os.environ.get("PGHOST", "localhost"),
+        }
+    }
+  config/celery.py: |
+    import os
+    from celery import Celery
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+    app = Celery("billing")
+    app.config_from_object("django.conf:settings", namespace="CELERY")
+    app.autodiscover_tasks()
+  billing/tasks.py: |
+    from celery import shared_task
+    from .mail import send_invoice
+
+    @shared_task
+    def email_invoice(invoice_id):
+        send_invoice(invoice_id)
+  Procfile: |
+    web: gunicorn config.wsgi
+    worker: celery -A config worker -l info

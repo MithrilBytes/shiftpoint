@@ -1,0 +1,39 @@
+id: python-django-mysql
+origin: "Django CMS-ish content site pointed at MySQL, common where the hosting company only sells MySQL."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.7
+    mysqlclient==2.2.4
+    gunicorn==22.0.0
+  manage.py: |
+    import os
+    import sys
+    from django.core.management import execute_from_command_line
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+        execute_from_command_line(sys.argv)
+  config/settings.py: |
+    import os
+
+    INSTALLED_APPS = ["django.contrib.admin", "django.contrib.auth", "pages"]
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.mysql",
+            "NAME": "sitecontent",
+            "USER": os.environ.get("MYSQL_USER", "site"),
+            "HOST": os.environ.get("MYSQL_HOST", "127.0.0.1"),
+            "PORT": "3306",
+        }
+    }
+  pages/models.py: |
+    from django.db import models
+
+    class Page(models.Model):
+        slug = models.SlugField(unique=True)
+        title = models.CharField(max_length=200)
+        body = models.TextField()

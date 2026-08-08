@@ -1,0 +1,60 @@
+id: infra-overkill-helm-chart-repository
+origin: >-
+  A platform team's charts repository. It holds Helm charts that other teams
+  install, and no application source at all. The charts are the product here,
+  the way a package is the product in a library repository.
+expect:
+  stage: library
+  flags: []
+files:
+  charts/api/Chart.yaml: |
+    apiVersion: v2
+    name: api
+    description: Standard chart for HTTP services
+    type: application
+    version: 2.3.0
+  charts/api/values.yaml: |
+    replicaCount: 1
+    image:
+      repository: ""
+      tag: ""
+      pullPolicy: IfNotPresent
+    service:
+      type: ClusterIP
+      port: 80
+  charts/api/templates/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: {{ include "api.fullname" . }}
+    spec:
+      replicas: {{ .Values.replicaCount }}
+      selector:
+        matchLabels:
+          app: {{ include "api.name" . }}
+      template:
+        metadata:
+          labels:
+            app: {{ include "api.name" . }}
+        spec:
+          containers:
+            - name: app
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+  charts/worker/Chart.yaml: |
+    apiVersion: v2
+    name: worker
+    description: Standard chart for queue consumers
+    type: application
+    version: 1.6.2
+  charts/worker/values.yaml: |
+    replicaCount: 1
+    queue: default
+    image:
+      repository: ""
+      tag: ""
+  README.md: |
+    # charts
+
+    Helm charts published to https://charts.internal.example.com. Add the repo
+    and `helm install` one of them. Nothing here is deployed from this
+    repository itself.

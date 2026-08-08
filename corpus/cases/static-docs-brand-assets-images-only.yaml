@@ -1,0 +1,31 @@
+id: static-docs-brand-assets-images-only
+origin: "A brand asset repository: logos and icons in SVG and nothing else. Design teams keep these so engineers can pull an approved mark instead of screenshotting one, and there is no code in them at all."
+expect:
+  stage: static-site
+  flags: []
+files:
+  logo/wordmark-light.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48">
+      <text x="0" y="34" font-family="Inter" font-size="32" fill="#111">Kestrel</text>
+    </svg>
+  logo/wordmark-dark.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48">
+      <text x="0" y="34" font-family="Inter" font-size="32" fill="#fff">Kestrel</text>
+    </svg>
+  logo/mark.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+      <path d="M24 4 L44 44 L4 44 Z" fill="#0b6e4f" />
+    </svg>
+  icons/arrow-right.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M5 12h14M13 6l6 6-6 6" stroke="currentColor" fill="none" stroke-width="2" />
+    </svg>
+  icons/download.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M12 3v12m0 0l-4-4m4 4l4-4M4 21h16" stroke="currentColor" fill="none" stroke-width="2" />
+    </svg>
+  icons/warning.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24">
+      <path d="M12 3 22 21H2Z" fill="none" stroke="currentColor" stroke-width="2" />
+      <path d="M12 10v5" stroke="currentColor" stroke-width="2" />
+    </svg>

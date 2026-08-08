@@ -1,0 +1,30 @@
+id: ruby-go-sinatra-webhook-relay
+origin: "A stateless Sinatra endpoint that receives GitHub webhooks and forwards a summary to Slack. Holds nothing, stores nothing."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "sinatra", "~> 4.0"
+    gem "rackup"
+    gem "puma"
+    gem "httparty"
+  app.rb: |
+    require "sinatra"
+    require "httparty"
+    require "json"
+
+    post "/github" do
+      payload = JSON.parse(request.body.read)
+      HTTParty.post(
+        ENV.fetch("SLACK_WEBHOOK_URL"),
+        body: { text: "#{payload["repository"]["full_name"]} pushed" }.to_json
+      )
+      status 204
+    end
+  config.ru: |
+    require "./app"
+    run Sinatra::Application
+  .env.example: |
+    SLACK_WEBHOOK_URL=https://hooks.slack.example/services/replace-me

@@ -1,0 +1,58 @@
+id: awkward-monorepo-api-and-ml-notebook
+origin: "The same monorepo shape one step further along: a plain Express API on Postgres, and next to it a notebook where somebody is fine tuning a model on their own GPU box. The heavy libraries belong to the notebook, which nobody hosts. What gets deployed is a stateless CRUD API."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "trailhead",
+      "private": true,
+      "workspaces": ["services/*"]
+    }
+  services/api/package.json: |
+    {
+      "name": "@trailhead/api",
+      "private": true,
+      "dependencies": {
+        "express": "^4.19.2",
+        "pg": "^8.12.0"
+      }
+    }
+  services/api/src/index.js: |
+    const express = require("express");
+    const { Pool } = require("pg");
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const app = express();
+
+    app.get("/trails", async (_req, res) => {
+      const { rows } = await pool.query("select id, name from trails");
+      res.json(rows);
+    });
+
+    app.listen(process.env.PORT || 3000);
+  notebooks/churn-model.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": null,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import torch\n", "from transformers import AutoModel\n", "model = AutoModel.from_pretrained('distilbert-base-uncased')"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  notebooks/requirements.txt: |
+    torch==2.3.1
+    transformers==4.42.3
+    pandas==2.2.2
+  README.md: |
+    # trailhead
+
+    `services/api` is what we deploy. `notebooks/` is an experiment that runs on
+    Kai's desktop, and nothing in it is called at request time.

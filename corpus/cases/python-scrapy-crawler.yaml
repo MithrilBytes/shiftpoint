@@ -1,0 +1,59 @@
+id: python-scrapy-crawler
+origin: "Ordinary scrapy project with one spider and a JSON-lines pipeline, run as a batch crawl rather than served to anyone."
+expect:
+  stage: script-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    Scrapy==2.11.2
+  scrapy.cfg: |
+    [settings]
+    default = pricewatch.settings
+
+    [deploy]
+    project = pricewatch
+  pricewatch/settings.py: |
+    BOT_NAME = "pricewatch"
+    SPIDER_MODULES = ["pricewatch.spiders"]
+    ROBOTSTXT_OBEY = True
+    DOWNLOAD_DELAY = 1.0
+    CONCURRENT_REQUESTS_PER_DOMAIN = 2
+    ITEM_PIPELINES = {"pricewatch.pipelines.JsonLinesPipeline": 300}
+  pricewatch/items.py: |
+    import scrapy
+
+    class ProductItem(scrapy.Item):
+        url = scrapy.Field()
+        title = scrapy.Field()
+        price = scrapy.Field()
+  pricewatch/spiders/products.py: |
+    import scrapy
+    from pricewatch.items import ProductItem
+
+    class ProductsSpider(scrapy.Spider):
+        name = "products"
+        start_urls = ["https://books.toscrape.com/"]
+
+        def parse(self, response):
+            for card in response.css("article.product_pod"):
+                yield ProductItem(
+                    url=response.urljoin(card.css("h3 a::attr(href)").get()),
+                    title=card.css("h3 a::attr(title)").get(),
+                    price=card.css("p.price_color::text").get(),
+                )
+            next_page = response.css("li.next a::attr(href)").get()
+            if next_page:
+                yield response.follow(next_page, self.parse)
+  pricewatch/pipelines.py: |
+    import json
+
+    class JsonLinesPipeline:
+        def open_spider(self, spider):
+            self.handle = open("products.jsonl", "w")
+
+        def process_item(self, item, spider):
+            self.handle.write(json.dumps(dict(item)) + "\n")
+            return item
+
+        def close_spider(self, spider):
+            self.handle.close()

@@ -1,0 +1,55 @@
+id: awkward-monorepo-api-and-notebook
+origin: "A small product monorepo: one deployable Next.js app on a serverless Postgres client, plus a notebooks folder the growth person opens on a laptop once a week. Very common shape once a startup hires anyone who touches data. The notebook is not deployed and never will be, so the hosting question is about apps/web alone."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "acme",
+      "private": true,
+      "workspaces": ["apps/*"]
+    }
+  apps/web/package.json: |
+    {
+      "name": "@acme/web",
+      "private": true,
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "@neondatabase/serverless": "^0.9.3"
+      }
+    }
+  apps/web/app/page.tsx: |
+    import { neon } from "@neondatabase/serverless";
+
+    export default async function Home() {
+      const sql = neon(process.env.DATABASE_URL!);
+      const rows = await sql`select name from teams order by name`;
+      return <ul>{rows.map((r) => <li key={r.name}>{r.name}</li>)}</ul>;
+    }
+  notebooks/weekly-retention.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import pandas as pd\n", "df = pd.read_csv('exports/signups.csv')\n", "df.groupby('week').size().plot()"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  notebooks/requirements.txt: |
+    pandas==2.2.2
+    matplotlib==3.9.0
+    jupyterlab==4.2.3
+  README.md: |
+    # acme
+
+    `apps/web` is the product. `notebooks/` is scratch analysis run locally
+    against CSV exports, and is not part of any deploy.

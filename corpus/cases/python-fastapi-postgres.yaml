@@ -1,0 +1,47 @@
+id: python-fastapi-postgres
+origin: "FastAPI CRUD service over async SQLAlchemy and Postgres, the current default for a new Python API."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn[standard]==0.30.1
+    sqlalchemy[asyncio]==2.0.31
+    asyncpg==0.29.0
+  main.py: |
+    from fastapi import FastAPI
+    from db import session_scope
+    from models import Ticket
+
+    app = FastAPI()
+
+    @app.get("/tickets")
+    async def list_tickets():
+        async with session_scope() as session:
+            rows = await session.execute(Ticket.__table__.select())
+            return [dict(row._mapping) for row in rows]
+  db.py: |
+    import os
+    from contextlib import asynccontextmanager
+    from sqlalchemy.ext.asyncio import async_sessionmaker, create_async_engine
+
+    engine = create_async_engine(os.environ["DATABASE_URL"])
+    Session = async_sessionmaker(engine)
+
+    @asynccontextmanager
+    async def session_scope():
+        async with Session() as session:
+            yield session
+  models.py: |
+    from sqlalchemy import Column, Integer, String
+    from sqlalchemy.orm import declarative_base
+
+    Base = declarative_base()
+
+    class Ticket(Base):
+        __tablename__ = "tickets"
+        id = Column(Integer, primary_key=True)
+        subject = Column(String)
+  .env.example: |
+    DATABASE_URL=postgresql+asyncpg://localhost:5432/tickets

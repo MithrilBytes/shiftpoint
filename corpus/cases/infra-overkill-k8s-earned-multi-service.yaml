@@ -1,0 +1,114 @@
+id: infra-overkill-k8s-earned-multi-service
+origin: >-
+  A live collaboration product that actually runs several services: an HTTP
+  API, a websocket gateway that holds connections open, and a queue worker,
+  behind Postgres and Redis. Kubernetes here is answering something the
+  application really does.
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "coedit",
+      "version": "3.1.0",
+      "private": true,
+      "scripts": {
+        "start": "node src/api.js",
+        "gateway": "node src/gateway.js",
+        "worker": "node src/worker.js"
+      },
+      "dependencies": {
+        "express": "^4.19.2",
+        "socket.io": "^4.7.5",
+        "bullmq": "^5.8.2",
+        "pg": "^8.11.5"
+      }
+    }
+  src/gateway.js: |
+    const { Server } = require("socket.io");
+
+    const io = new Server(4000);
+    io.on("connection", (socket) => {
+      socket.on("edit", (patch) => socket.broadcast.emit("edit", patch));
+    });
+  src/worker.js: |
+    const { Worker } = require("bullmq");
+
+    new Worker("snapshots", async (job) => {
+      console.log("writing snapshot for document", job.data.documentId);
+    });
+  docker-compose.yml: |
+    services:
+      api:
+        build: .
+        ports:
+          - "3000:3000"
+      gateway:
+        build: .
+        command: node src/gateway.js
+        ports:
+          - "4000:4000"
+      worker:
+        build: .
+        command: node src/worker.js
+      db:
+        image: postgres:16
+      redis:
+        image: redis:7
+  k8s/api-deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: coedit-api
+    spec:
+      replicas: 4
+      selector:
+        matchLabels:
+          app: coedit-api
+      template:
+        metadata:
+          labels:
+            app: coedit-api
+        spec:
+          containers:
+            - name: api
+              image: ghcr.io/example/coedit:3.1.0
+  k8s/gateway-deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: coedit-gateway
+    spec:
+      replicas: 6
+      selector:
+        matchLabels:
+          app: coedit-gateway
+      template:
+        metadata:
+          labels:
+            app: coedit-gateway
+        spec:
+          containers:
+            - name: gateway
+              image: ghcr.io/example/coedit:3.1.0
+              command: ["node", "src/gateway.js"]
+  k8s/worker-deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: coedit-worker
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: coedit-worker
+      template:
+        metadata:
+          labels:
+            app: coedit-worker
+        spec:
+          containers:
+            - name: worker
+              image: ghcr.io/example/coedit:3.1.0
+              command: ["node", "src/worker.js"]

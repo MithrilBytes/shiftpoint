@@ -1,0 +1,47 @@
+id: node-nextjs-static-export
+origin: "A documentation site built with Next.js in static export mode. `next build` writes plain HTML into out/ and a workflow pushes that directory to GitHub Pages, so no Node process ever runs in production."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "handbook",
+      "private": true,
+      "scripts": { "dev": "next dev", "build": "next build" },
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1"
+      }
+    }
+  next.config.js: |
+    /** @type {import('next').NextConfig} */
+    module.exports = {
+      output: "export",
+      images: { unoptimized: true },
+      trailingSlash: true,
+    };
+  app/page.tsx: |
+    export default function Home() {
+      return <main><h1>Handbook</h1><p>How we work.</p></main>;
+    }
+  app/hiring/page.tsx: |
+    export default function Hiring() {
+      return <main><h1>Hiring</h1><p>What our interviews look like.</p></main>;
+    }
+  .github/workflows/pages.yml: |
+    name: pages
+    on:
+      push:
+        branches: [main]
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: npm ci && npm run build
+          - uses: actions/upload-pages-artifact@v3
+            with:
+              path: out
+          - uses: actions/deploy-pages@v4

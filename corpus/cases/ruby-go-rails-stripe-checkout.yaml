@@ -1,0 +1,36 @@
+id: ruby-go-rails-stripe-checkout
+origin: "A Rails product that takes card payments through Stripe Checkout and has a public pricing page. Money changes hands, so the personal free plans do not cover it."
+expect:
+  stage: commercial-app-on-managed-hosting
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "rails", "~> 7.1.3"
+    gem "pg", "~> 1.5"
+    gem "puma", ">= 6.4"
+    gem "stripe", "~> 12.0"
+  app/controllers/checkout_controller.rb: |
+    class CheckoutController < ApplicationController
+      def create
+        session = Stripe::Checkout::Session.create(
+          mode: "subscription",
+          line_items: [{ price: params[:price_id], quantity: 1 }],
+          success_url: root_url
+        )
+        redirect_to session.url, allow_other_host: true
+      end
+    end
+  app/views/pricing/index.html.erb: |
+    <h1>Pricing</h1>
+    <% Plan.all.each do |plan| %>
+      <%= button_to "Subscribe", checkout_path(price_id: plan.stripe_price_id) %>
+    <% end %>
+  config/database.yml: |
+    production:
+      adapter: postgresql
+      url: <%= ENV["DATABASE_URL"] %>
+  app/models/plan.rb: |
+    class Plan < ApplicationRecord
+      validates :stripe_price_id, presence: true
+    end

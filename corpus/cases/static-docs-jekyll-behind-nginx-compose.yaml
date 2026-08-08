@@ -1,0 +1,47 @@
+id: static-docs-jekyll-behind-nginx-compose
+origin: "A Jekyll site self hosted on a rented VPS: a compose file runs nginx over the built _site directory. A real and popular habit, and also a server being paid for to serve files a free static host would serve for nothing."
+expect:
+  stage: static-site
+  flags: [composed-stack-that-runs-free]
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "jekyll", "~> 4.3"
+    gem "jekyll-sitemap"
+  _config.yml: |
+    title: Fen Road Bicycle Cooperative
+    description: Repairs, workshops, and second hand bikes.
+    plugins:
+      - jekyll-sitemap
+  index.md: |
+    ---
+    layout: default
+    ---
+
+    # Fen Road Bicycle Cooperative
+
+    Open Thursday to Sunday. Bring the bike, we will find the part.
+  workshops.md: |
+    ---
+    layout: default
+    title: Workshops
+    ---
+
+    Wheel building, first Saturday. Basic maintenance, third Saturday.
+  docker-compose.yml: |
+    services:
+      web:
+        image: nginx:1.27-alpine
+        ports:
+          - "80:80"
+        volumes:
+          - ./_site:/usr/share/nginx/html:ro
+          - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+        restart: unless-stopped
+  nginx.conf: |
+    server {
+      listen 80;
+      root /usr/share/nginx/html;
+      error_page 404 /404.html;
+    }

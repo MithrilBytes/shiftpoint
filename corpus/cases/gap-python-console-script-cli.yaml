@@ -1,0 +1,47 @@
+id: gap-python-console-script-cli
+origin: "A pip installable command line tool that tidies unified diffs before review. A pyproject with a [project.scripts] entry point is how every Python CLI on PyPI declares itself, and nothing about it is hosted anywhere."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  pyproject.toml: |
+    [project]
+    name = "tidydiff"
+    version = "1.3.0"
+    description = "Reorder and collapse a unified diff before you read it"
+    requires-python = ">=3.10"
+    dependencies = ["click>=8.1"]
+
+    [project.scripts]
+    tidydiff = "tidydiff.cli:main"
+
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+  src/tidydiff/cli.py: |
+    import sys
+    import click
+    from .collapse import collapse
+
+    @click.command()
+    @click.option("--context", default=3, help="Lines of context to keep.")
+    def main(context):
+        """Read a unified diff on stdin, write a tidier one on stdout."""
+        sys.stdout.write(collapse(sys.stdin.read(), context))
+  src/tidydiff/collapse.py: |
+    def collapse(diff, context):
+        kept = []
+        for hunk in diff.split("\n@@"):
+            lines = hunk.splitlines()
+            head, body = lines[:1], lines[1:]
+            kept.extend(head + body[: context * 2])
+        return "\n".join(kept) + "\n"
+  tests/test_collapse.py: |
+    from tidydiff.collapse import collapse
+
+    def test_keeps_the_hunk_header():
+        assert collapse("@@ -1,4 +1,4 @@\n-a\n+b\n", 1).startswith("@@")
+  README.md: |
+    # tidydiff
+
+    `pipx install tidydiff`, then `git diff | tidydiff --context 1`.

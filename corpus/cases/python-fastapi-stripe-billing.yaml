@@ -1,0 +1,65 @@
+id: python-fastapi-stripe-billing
+origin: "FastAPI backend for a paid product: Stripe checkout, a webhook handler and a pricing route. Stateless, but plainly a business."
+expect:
+  stage: commercial-app-on-managed-hosting
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn[standard]==0.30.1
+    stripe==10.5.0
+    sqlalchemy==2.0.31
+    psycopg[binary]==3.2.1
+  main.py: |
+    import os
+    import stripe
+    from fastapi import FastAPI, Request
+
+    stripe.api_key = os.environ["STRIPE_SECRET_KEY"]
+    app = FastAPI()
+
+    @app.get("/pricing")
+    def pricing():
+        return [
+            {"plan": "starter", "usd": 12},
+            {"plan": "team", "usd": 49},
+        ]
+
+    @app.post("/checkout")
+    def checkout(price_id: str):
+        session = stripe.checkout.Session.create(
+            mode="subscription",
+            line_items=[{"price": price_id, "quantity": 1}],
+            success_url="https://app.example.com/welcome",
+        )
+        return {"url": session.url}
+  webhooks.py: |
+    import os
+    import stripe
+    from fastapi import APIRouter, Request
+
+    router = APIRouter()
+
+    @router.post("/webhooks/stripe")
+    async def stripe_webhook(request: Request):
+        event = stripe.Webhook.construct_event(
+            await request.body(),
+            request.headers["stripe-signature"],
+            os.environ["STRIPE_WEBHOOK_SECRET"],
+        )
+        return {"handled": event["type"]}
+  models.py: |
+    from sqlalchemy import Column, Integer, String
+    from sqlalchemy.orm import declarative_base
+
+    Base = declarative_base()
+
+    class Subscription(Base):
+        __tablename__ = "subscriptions"
+        id = Column(Integer, primary_key=True)
+        customer_id = Column(String)
+        plan = Column(String)
+  .env.example: |
+    DATABASE_URL=postgresql://localhost:5432/billing
+    STRIPE_SECRET_KEY=sk_test_replace_me
+    STRIPE_WEBHOOK_SECRET=whsec_replace_me

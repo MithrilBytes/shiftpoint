@@ -1,0 +1,57 @@
+id: awkward-dataset-with-validator
+origin: "An open data repository: the deliverable is the CSV files, and the only code is a standard library validator that CI runs on every pull request to keep contributors from breaking the schema. Nothing here is ever deployed anywhere, and the validator runs on the CI runner."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  data/stations-2023.csv: |
+    station_id,name,latitude,longitude,opened
+    0114,Ashford Road,51.1465,0.8749,1884-04-01
+    0115,Bell Green,51.4372,-0.0261,1892-09-12
+  data/stations-2024.csv: |
+    station_id,name,latitude,longitude,opened
+    0114,Ashford Road,51.1465,0.8749,1884-04-01
+    0116,Corvey Halt,53.3011,-1.4701,2024-03-18
+  data/readings-2024.csv: |
+    station_id,taken_at,rainfall_mm
+    0114,2024-01-01T06:00:00Z,2.4
+    0116,2024-03-19T06:00:00Z,0.0
+  validate.py: |
+    import csv
+    import sys
+    from pathlib import Path
+
+    HEADERS = {
+        "stations": ["station_id", "name", "latitude", "longitude", "opened"],
+        "readings": ["station_id", "taken_at", "rainfall_mm"],
+    }
+
+    def main() -> int:
+        problems = []
+        for path in sorted(Path("data").glob("*.csv")):
+            kind = path.stem.split("-")[0]
+            with path.open(newline="") as handle:
+                header = next(csv.reader(handle))
+            if header != HEADERS.get(kind):
+                problems.append(f"{path}: unexpected header {header}")
+        for problem in problems:
+            print(problem)
+        return 1 if problems else 0
+
+    if __name__ == "__main__":
+        sys.exit(main())
+  .github/workflows/validate.yml: |
+    name: validate
+    on: [push, pull_request]
+    jobs:
+      validate:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: python validate.py
+  README.md: |
+    # rainfall-open-data
+
+    Daily rainfall readings for 214 stations, published as CSV under CC-BY.
+    Corrections welcome by pull request. `validate.py` checks the headers and
+    is run by CI; there is no application here.

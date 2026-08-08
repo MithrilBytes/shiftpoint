@@ -1,0 +1,56 @@
+id: node-nextjs-app-router-postgres
+origin: "Next.js 15 app router with Prisma over Postgres, the default shape of a new product built on Vercel and Neon."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "notes",
+      "private": true,
+      "scripts": { "dev": "next dev", "build": "next build" },
+      "dependencies": {
+        "next": "15.1.0",
+        "react": "19.0.0",
+        "react-dom": "19.0.0",
+        "@prisma/client": "^5.19.0"
+      },
+      "devDependencies": { "prisma": "^5.19.0", "typescript": "^5.5.4" }
+    }
+  prisma/schema.prisma: |
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+    }
+
+    generator client {
+      provider = "prisma-client-js"
+    }
+
+    model Note {
+      id    Int    @id @default(autoincrement())
+      title String
+      body  String
+    }
+  app/page.tsx: |
+    import { prisma } from "../lib/db";
+
+    export default async function Home() {
+      const notes = await prisma.note.findMany({ take: 20 });
+      return <ul>{notes.map((n) => <li key={n.id}>{n.title}</li>)}</ul>;
+    }
+  app/api/notes/route.ts: |
+    import { NextResponse } from "next/server";
+    import { prisma } from "../../../lib/db";
+
+    export async function POST(request: Request) {
+      const body = await request.json();
+      const note = await prisma.note.create({ data: body });
+      return NextResponse.json(note, { status: 201 });
+    }
+  lib/db.ts: |
+    import { PrismaClient } from "@prisma/client";
+
+    export const prisma = new PrismaClient();
+  .env.example: |
+    DATABASE_URL=postgresql://localhost:5432/notes

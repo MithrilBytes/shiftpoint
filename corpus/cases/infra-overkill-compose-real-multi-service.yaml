@@ -1,0 +1,84 @@
+id: infra-overkill-compose-real-multi-service
+origin: >-
+  A self hosted product that really is deployed with compose on a rented box:
+  an API and a worker built from this repository, plus Postgres and Redis
+  behind them. The compose file is the deployment, not a dev convenience.
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "invoicer",
+      "version": "1.0.0",
+      "private": true,
+      "scripts": {
+        "start": "node src/api.js",
+        "worker": "node src/worker.js"
+      },
+      "dependencies": {
+        "express": "^4.19.2",
+        "bullmq": "^5.8.2",
+        "ioredis": "^5.4.1",
+        "pg": "^8.11.5"
+      }
+    }
+  src/api.js: |
+    const express = require("express");
+    const { Queue } = require("bullmq");
+
+    const renders = new Queue("renders", { connection: { host: process.env.REDIS_HOST } });
+    const app = express();
+
+    app.post("/invoices/:id/render", async (req, res) => {
+      await renders.add("render", { id: req.params.id });
+      res.status(202).end();
+    });
+
+    app.listen(3000);
+  src/worker.js: |
+    const { Worker } = require("bullmq");
+
+    new Worker(
+      "renders",
+      async (job) => {
+        console.log("rendering invoice", job.data.id);
+      },
+      { connection: { host: process.env.REDIS_HOST } },
+    );
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY . .
+    RUN npm ci --omit=dev
+    CMD ["node", "src/api.js"]
+  docker-compose.yml: |
+    services:
+      api:
+        build: .
+        ports:
+          - "3000:3000"
+        environment:
+          REDIS_HOST: redis
+          DATABASE_URL: postgres://invoicer:invoicer@db:5432/invoicer
+        depends_on: [db, redis]
+      worker:
+        build: .
+        command: node src/worker.js
+        environment:
+          REDIS_HOST: redis
+          DATABASE_URL: postgres://invoicer:invoicer@db:5432/invoicer
+        depends_on: [db, redis]
+      db:
+        image: postgres:16
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+      redis:
+        image: redis:7
+
+    volumes:
+      pgdata:
+  README.md: |
+    # invoicer
+
+    Self hosted invoicing. `docker compose up -d` on the server is the deploy.

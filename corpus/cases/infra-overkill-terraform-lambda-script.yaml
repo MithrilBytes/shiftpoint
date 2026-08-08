@@ -1,0 +1,61 @@
+id: infra-overkill-terraform-lambda-script
+origin: >-
+  A single handler function with no dependencies, deployed to AWS Lambda by a
+  short Terraform file. Infrastructure as code that is proportionate: the
+  Terraform provisions the free tier rather than a cluster.
+expect:
+  stage: script-on-free-functions
+  flags: []
+files:
+  handler.js: |
+    exports.handler = async (event) => {
+      const body = JSON.parse(event.body || "{}");
+      return {
+        statusCode: 200,
+        body: JSON.stringify({ upper: String(body.text || "").toUpperCase() }),
+      };
+    };
+  package.json: |
+    {
+      "name": "shout",
+      "version": "0.1.0",
+      "private": true,
+      "main": "handler.js"
+    }
+  infra/main.tf: |
+    data "archive_file" "bundle" {
+      type        = "zip"
+      source_file = "${path.module}/../handler.js"
+      output_path = "${path.module}/bundle.zip"
+    }
+
+    resource "aws_lambda_function" "shout" {
+      function_name    = "shout"
+      role             = aws_iam_role.lambda.arn
+      handler          = "handler.handler"
+      runtime          = "nodejs20.x"
+      filename         = data.archive_file.bundle.output_path
+      source_code_hash = data.archive_file.bundle.output_base64sha256
+    }
+
+    resource "aws_lambda_function_url" "shout" {
+      function_name      = aws_lambda_function.shout.function_name
+      authorization_type = "NONE"
+    }
+  infra/iam.tf: |
+    resource "aws_iam_role" "lambda" {
+      name = "shout-lambda"
+
+      assume_role_policy = jsonencode({
+        Version = "2012-10-17"
+        Statement = [{
+          Action    = "sts:AssumeRole"
+          Effect    = "Allow"
+          Principal = { Service = "lambda.amazonaws.com" }
+        }]
+      })
+    }
+  README.md: |
+    # shout
+
+    One function behind a Lambda function URL. `terraform -chdir=infra apply`.

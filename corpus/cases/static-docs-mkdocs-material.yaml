@@ -1,0 +1,30 @@
+id: static-docs-mkdocs-material
+origin: "Python project documentation on MkDocs with the Material theme, the standard docs setup in the Python world. `mkdocs build` writes a site/ directory of HTML."
+expect:
+  stage: static-site
+  flags: []
+files:
+  mkdocs.yml: |
+    site_name: Tessellate
+    site_url: https://tessellate.example/
+    theme:
+      name: material
+    nav:
+      - Home: index.md
+      - Usage: usage.md
+      - API: api.md
+  requirements.txt: |
+    mkdocs==1.6.0
+    mkdocs-material==9.5.30
+  docs/index.md: |
+    # Tessellate
+
+    A small library for packing irregular shapes onto a sheet.
+  docs/usage.md: |
+    # Usage
+
+    Pass a list of polygons and a sheet size. You get back placements.
+  docs/api.md: |
+    # API
+
+    ::: tessellate.pack

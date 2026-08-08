@@ -1,0 +1,36 @@
+id: python-flask-postgres
+origin: "Small Flask JSON API on SQLAlchemy and managed Postgres, the shape a side project reaches after it outgrows a file."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    Flask==3.0.3
+    SQLAlchemy==2.0.31
+    psycopg2-binary==2.9.9
+    gunicorn==22.0.0
+  app.py: |
+    from flask import Flask, jsonify
+    from models import Session, Note
+
+    app = Flask(__name__)
+
+    @app.get("/notes")
+    def notes():
+        with Session() as session:
+            return jsonify([note.body for note in session.query(Note).all()])
+  models.py: |
+    import os
+    from sqlalchemy import Column, Integer, String, create_engine
+    from sqlalchemy.orm import declarative_base, sessionmaker
+
+    engine = create_engine(os.environ["DATABASE_URL"])
+    Session = sessionmaker(bind=engine)
+    Base = declarative_base()
+
+    class Note(Base):
+        __tablename__ = "notes"
+        id = Column(Integer, primary_key=True)
+        body = Column(String)
+  .env.example: |
+    DATABASE_URL=postgresql://localhost:5432/notes

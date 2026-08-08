@@ -1,0 +1,92 @@
+id: infra-overkill-django-celery-helm
+origin: >-
+  A Django application with a Celery worker and a beat scheduler, deployed by a
+  Helm chart that ships a deployment per process. The chart is doing real work
+  here: there is more than one long lived process to place.
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.6
+    celery==5.4.0
+    redis==5.0.7
+    psycopg2-binary==2.9.9
+    gunicorn==22.0.0
+  manage.py: |
+    import os
+    import sys
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ledger.settings")
+        from django.core.management import execute_from_command_line
+
+        execute_from_command_line(sys.argv)
+  ledger/celery.py: |
+    import os
+    from celery import Celery
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "ledger.settings")
+
+    app = Celery("ledger")
+    app.config_from_object("django.conf:settings", namespace="CELERY")
+    app.autodiscover_tasks()
+
+    @app.task
+    def close_month(period):
+        return f"closed {period}"
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: ledger
+    type: application
+    version: 1.9.0
+    appVersion: "2026.6"
+  chart/values.yaml: |
+    image:
+      repository: registry.internal/ledger
+      tag: "2026.6"
+    web:
+      replicaCount: 3
+    worker:
+      replicaCount: 4
+      concurrency: 8
+    beat:
+      enabled: true
+  chart/templates/web-deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ledger-web
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: ledger-web
+      template:
+        metadata:
+          labels:
+            app: ledger-web
+        spec:
+          containers:
+            - name: web
+              image: registry.internal/ledger:2026.6
+              command: ["gunicorn", "ledger.wsgi"]
+  chart/templates/worker-deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: ledger-worker
+    spec:
+      replicas: 4
+      selector:
+        matchLabels:
+          app: ledger-worker
+      template:
+        metadata:
+          labels:
+            app: ledger-worker
+        spec:
+          containers:
+            - name: worker
+              image: registry.internal/ledger:2026.6
+              command: ["celery", "-A", "ledger", "worker"]

@@ -1,0 +1,46 @@
+id: ruby-go-stdlib-http-service
+origin: "A Go HTTP service written against net/http alone, so go.mod declares no requirements at all. Very common in Go, where the standard library covers routing well enough that people skip the framework."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/statuspage
+
+    go 1.22
+  main.go: |
+    package main
+
+    import (
+    	"encoding/json"
+    	"log"
+    	"net/http"
+    )
+
+    func main() {
+    	mux := http.NewServeMux()
+    	mux.HandleFunc("GET /healthz", func(w http.ResponseWriter, r *http.Request) {
+    		json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+    	})
+    	mux.HandleFunc("GET /checks", listChecks)
+    	log.Fatal(http.ListenAndServe(":8080", mux))
+    }
+  checks.go: |
+    package main
+
+    import "net/http"
+
+    func listChecks(w http.ResponseWriter, r *http.Request) {
+    	w.Header().Set("Content-Type", "application/json")
+    	w.Write([]byte(`[{"name":"api","up":true}]`))
+    }
+  Dockerfile: |
+    FROM golang:1.22 AS build
+    WORKDIR /src
+    COPY . .
+    RUN CGO_ENABLED=0 go build -o /out/statuspage .
+
+    FROM gcr.io/distroless/static-debian12
+    COPY --from=build /out/statuspage /statuspage
+    EXPOSE 8080
+    ENTRYPOINT ["/statuspage"]

@@ -1,0 +1,65 @@
+id: node-monorepo-two-apps
+origin: "A Turborepo with npm workspaces: a Next.js front end, a Fastify API, and a shared component package neither of them publishes. Two deployables, one repository, no database yet."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "meridian",
+      "private": true,
+      "workspaces": ["apps/*", "packages/*"],
+      "scripts": { "build": "turbo run build", "dev": "turbo run dev" },
+      "devDependencies": { "turbo": "^2.1.1", "typescript": "^5.5.4" }
+    }
+  turbo.json: |
+    {
+      "$schema": "https://turbo.build/schema.json",
+      "tasks": {
+        "build": { "dependsOn": ["^build"], "outputs": ["dist/**", ".next/**"] },
+        "dev": { "cache": false, "persistent": true }
+      }
+    }
+  apps/web/package.json: |
+    {
+      "name": "@meridian/web",
+      "private": true,
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "@meridian/ui": "*"
+      }
+    }
+  apps/web/app/page.tsx: |
+    import { Card } from "@meridian/ui";
+
+    export default async function Home() {
+      const stations = await fetch(`${process.env.API_URL}/stations`).then((r) => r.json());
+      return <>{stations.map((s: { id: string; name: string }) => <Card key={s.id} title={s.name} />)}</>;
+    }
+  apps/api/package.json: |
+    {
+      "name": "@meridian/api",
+      "private": true,
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": { "fastify": "^4.28.1", "@meridian/ui": "*" }
+    }
+  apps/api/src/server.js: |
+    import Fastify from "fastify";
+    import { STATIONS } from "./stations.js";
+
+    const app = Fastify();
+    app.get("/stations", async () => STATIONS);
+    await app.listen({ port: 3001, host: "0.0.0.0" });
+  packages/ui/package.json: |
+    {
+      "name": "@meridian/ui",
+      "private": true,
+      "main": "./src/index.tsx",
+      "peerDependencies": { "react": "^18" }
+    }
+  packages/ui/src/index.tsx: |
+    export function Card({ title }: { title: string }) {
+      return <article className="card"><h2>{title}</h2></article>;
+    }

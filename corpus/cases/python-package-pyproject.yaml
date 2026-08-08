@@ -1,0 +1,51 @@
+id: python-package-pyproject
+origin: "A small library published to PyPI: src layout, hatchling build backend, no entry points and nothing to run."
+expect:
+  stage: library
+  flags: []
+files:
+  pyproject.toml: |
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+
+    [project]
+    name = "slugcase"
+    version = "0.3.1"
+    description = "Convert strings between slug, snake and camel case."
+    requires-python = ">=3.9"
+    dependencies = []
+
+    [project.urls]
+    Source = "https://github.com/example/slugcase"
+  src/slugcase/__init__.py: |
+    from .convert import to_camel, to_slug, to_snake
+
+    __all__ = ["to_slug", "to_snake", "to_camel"]
+  src/slugcase/convert.py: |
+    import re
+
+    _WORDS = re.compile(r"[A-Za-z0-9]+")
+
+    def _words(value):
+        return [word.lower() for word in _WORDS.findall(value)]
+
+    def to_slug(value):
+        return "-".join(_words(value))
+
+    def to_snake(value):
+        return "_".join(_words(value))
+
+    def to_camel(value):
+        head, *rest = _words(value)
+        return head + "".join(word.title() for word in rest)
+  src/slugcase/py.typed: ""
+  tests/test_convert.py: |
+    from slugcase import to_slug
+
+    def test_to_slug():
+        assert to_slug("Hello There World") == "hello-there-world"
+  README.md: |
+    # slugcase
+
+    `pip install slugcase`. Three functions, no dependencies.

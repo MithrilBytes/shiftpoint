@@ -1,0 +1,83 @@
+id: infra-overkill-sqlite-app-on-kubernetes
+origin: >-
+  A small Flask app storing everything in one SQLite file, deployed as a
+  StatefulSet with a persistent volume claim so the file survives a restart.
+  A real pattern, and one where the cluster buys nothing: the single writer
+  file is the constraint, not the number of pods.
+expect:
+  stage: app-with-file-database
+  flags:
+    - kubernetes-without-demand
+files:
+  requirements.txt: |
+    flask==3.0.3
+    gunicorn==22.0.0
+  app.py: |
+    import sqlite3
+    from flask import Flask, request
+
+    DB = "/data/reading.db"
+    app = Flask(__name__)
+
+    @app.get("/books")
+    def books():
+        with sqlite3.connect(DB) as conn:
+            rows = conn.execute("select id, title, finished from books").fetchall()
+        return {"books": [{"id": r[0], "title": r[1], "finished": r[2]} for r in rows]}
+
+    @app.post("/books")
+    def add():
+        with sqlite3.connect(DB) as conn:
+            conn.execute("insert into books (title) values (?)", (request.form["title"],))
+        return "", 201
+  schema.sql: |
+    create table if not exists books (
+      id integer primary key autoincrement,
+      title text not null,
+      finished integer not null default 0
+    );
+  k8s/statefulset.yaml: |
+    apiVersion: apps/v1
+    kind: StatefulSet
+    metadata:
+      name: reading
+    spec:
+      serviceName: reading
+      replicas: 1
+      selector:
+        matchLabels:
+          app: reading
+      template:
+        metadata:
+          labels:
+            app: reading
+        spec:
+          containers:
+            - name: web
+              image: registry.internal/reading:latest
+              volumeMounts:
+                - name: data
+                  mountPath: /data
+      volumeClaimTemplates:
+        - metadata:
+            name: data
+          spec:
+            accessModes: ["ReadWriteOnce"]
+            resources:
+              requests:
+                storage: 1Gi
+  k8s/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: reading
+    spec:
+      selector:
+        app: reading
+      ports:
+        - port: 80
+          targetPort: 8000
+  README.md: |
+    # reading
+
+    A reading list. One SQLite file on a persistent volume.

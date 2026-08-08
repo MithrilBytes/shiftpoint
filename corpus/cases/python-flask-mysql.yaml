@@ -1,0 +1,30 @@
+id: python-flask-mysql
+origin: "Internal Flask inventory API talking to a MySQL instance, the usual shape when the database predates the app."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    Flask==3.0.3
+    Flask-SQLAlchemy==3.1.1
+    PyMySQL==1.1.1
+    gunicorn==22.0.0
+  app.py: |
+    import os
+    from flask import Flask, jsonify
+    from flask_sqlalchemy import SQLAlchemy
+
+    app = Flask(__name__)
+    app.config["SQLALCHEMY_DATABASE_URI"] = os.environ["DATABASE_URL"]
+    db = SQLAlchemy(app)
+
+    class Part(db.Model):
+        id = db.Column(db.Integer, primary_key=True)
+        sku = db.Column(db.String(32), unique=True)
+        on_hand = db.Column(db.Integer, default=0)
+
+    @app.get("/parts")
+    def parts():
+        return jsonify([p.sku for p in Part.query.all()])
+  .env.example: |
+    DATABASE_URL=mysql+pymysql://inventory@db.internal:3306/inventory

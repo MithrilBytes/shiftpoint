@@ -1,0 +1,70 @@
+id: awkward-rust-cli
+origin: "A Rust command line tool people install with `cargo install` and run on their own machines. Cargo declares a single binary target and the release workflow uploads platform archives. There is nothing to host, and Rust is a language this tool does not read."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "logfold"
+    version = "0.4.1"
+    edition = "2021"
+    description = "Collapse repeated lines in structured logs"
+    license = "MIT"
+
+    [[bin]]
+    name = "logfold"
+    path = "src/main.rs"
+
+    [dependencies]
+    clap = { version = "4.5", features = ["derive"] }
+    serde_json = "1.0"
+  src/main.rs: |
+    use clap::Parser;
+    use std::io::{self, BufRead};
+
+    #[derive(Parser)]
+    struct Args {
+        /// Collapse runs longer than this
+        #[arg(short, long, default_value_t = 3)]
+        threshold: usize,
+    }
+
+    fn main() {
+        let args = Args::parse();
+        let stdin = io::stdin();
+        for line in stdin.lock().lines().flatten() {
+            println!("{}", logfold::fold(&line, args.threshold));
+        }
+    }
+  src/lib.rs: |
+    pub fn fold(line: &str, threshold: usize) -> String {
+        if line.len() > threshold * 40 {
+            format!("{}...", &line[..threshold * 40])
+        } else {
+            line.to_string()
+        }
+    }
+  .github/workflows/release.yml: |
+    name: release
+    on:
+      push:
+        tags: ["v*"]
+    jobs:
+      build:
+        strategy:
+          matrix:
+            target: [x86_64-unknown-linux-gnu, aarch64-apple-darwin]
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: cargo build --release --target ${{ matrix.target }}
+  README.md: |
+    # logfold
+
+    ```
+    cargo install logfold
+    tail -f app.log | logfold --threshold 5
+    ```
+
+    Reads stdin, writes stdout. No configuration, no daemon.

@@ -1,0 +1,57 @@
+id: infra-overkill-cronjob-script-on-k8s
+origin: >-
+  A nightly sync script written against the Python standard library, no
+  third party dependencies, shipped as a container and scheduled with a
+  Kubernetes CronJob because the team already had a cluster.
+expect:
+  stage: script-on-free-functions
+  flags:
+    - kubernetes-without-demand
+files:
+  sync.py: |
+    import csv
+    import json
+    import os
+    import urllib.request
+
+    URL = os.environ["FEED_URL"]
+
+    def main():
+        with urllib.request.urlopen(URL) as response:
+            rows = json.load(response)
+
+        with open("/out/inventory.csv", "w", newline="") as handle:
+            writer = csv.DictWriter(handle, fieldnames=["sku", "count"])
+            writer.writeheader()
+            writer.writerows(rows)
+
+    if __name__ == "__main__":
+        main()
+  Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /app
+    COPY sync.py .
+    CMD ["python", "sync.py"]
+  k8s/cronjob.yaml: |
+    apiVersion: batch/v1
+    kind: CronJob
+    metadata:
+      name: inventory-sync
+    spec:
+      schedule: "0 3 * * *"
+      jobTemplate:
+        spec:
+          template:
+            spec:
+              restartPolicy: OnFailure
+              containers:
+                - name: sync
+                  image: registry.internal/inventory-sync:latest
+                  env:
+                    - name: FEED_URL
+                      value: https://feeds.example.com/inventory.json
+  README.md: |
+    # inventory-sync
+
+    Pulls the supplier feed once a night and writes a CSV. Scheduled by
+    `k8s/cronjob.yaml`.

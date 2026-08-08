@@ -1,0 +1,65 @@
+id: gap-socketio-chat-postgres
+origin: "An Express team chat with socket.io for delivery and Postgres for history. The socket connection lives as long as the browser tab does, and the messages have to survive a restart, so this needs a box that stays up and a database that is not a file on it."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "signal-room",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "socket.io": "^4.7.5",
+        "pg": "^8.12.0"
+      }
+    }
+  src/server.js: |
+    import express from "express";
+    import { createServer } from "node:http";
+    import { Server } from "socket.io";
+    import { attach } from "./sockets.js";
+    import { recent } from "./messages.js";
+
+    const app = express();
+    app.get("/rooms/:id/messages", async (req, res) => res.json(await recent(req.params.id)));
+
+    const http = createServer(app);
+    attach(new Server(http));
+    http.listen(3000);
+  src/sockets.js: |
+    import { save } from "./messages.js";
+
+    export function attach(io) {
+      io.on("connection", (socket) => {
+        socket.on("join", (room) => socket.join(room));
+        socket.on("say", async ({ room, body, author }) => {
+          const message = await save(room, author, body);
+          io.to(room).emit("said", message);
+        });
+      });
+    }
+  src/messages.js: |
+    import pg from "pg";
+
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+    export async function save(room, author, body) {
+      const { rows } = await pool.query(
+        "insert into messages (room, author, body) values ($1, $2, $3) returning *",
+        [room, author, body],
+      );
+      return rows[0];
+    }
+
+    export async function recent(room) {
+      const { rows } = await pool.query(
+        "select * from messages where room = $1 order by id desc limit 50",
+        [room],
+      );
+      return rows;
+    }
+  .env.example: |
+    DATABASE_URL=postgres://chat:chat@localhost:5432/chat

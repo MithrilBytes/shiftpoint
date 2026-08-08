@@ -14,6 +14,13 @@ const DRIZZLE_CONFIG = /(^|\/)drizzle\.config\.[cm]?[jt]s$/;
 const ENV_EXAMPLE = /(^|\/)\.env(\.example|\.sample|\.template)?$/;
 const PYTHON_SOURCE = /\.py$/;
 
+// Django declares its database in settings, not in a dependency. Nothing else
+// in the repository names it: sqlite3 is in the standard library and the ORM
+// imports it internally. Without this, a Django app whose entire state is a
+// file on local disk was told a function tier would do, which is the one
+// deployment that loses the data.
+const DJANGO_ENGINE = /django\.db\.backends\.(sqlite3|postgresql[_a-z]*|mysql)/g;
+
 // Maps every name this detector understands onto the engine's vocabulary.
 export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["postgresql", "postgres"],
@@ -91,6 +98,15 @@ export function detectDatabase(repo: Repo): Signal[] {
   }
   for (const name of goDependencies(repo)) {
     note(ENGINE_BY_ALIAS.get(name), `go.mod requires ${name}`);
+  }
+
+  for (const file of repo.matching(PYTHON_SOURCE).slice(0, MAX_SOURCE_FILES_SCANNED)) {
+    const text = repo.read(file) ?? "";
+    for (const match of text.matchAll(DJANGO_ENGINE)) {
+      const backend = (match[1] ?? "").toLowerCase();
+      const engine = backend.startsWith("postgresql") ? "postgres" : backend === "mysql" ? "mysql" : "sqlite";
+      note(engine, `${file} sets the Django ${backend} backend`);
+    }
   }
 
   // The Python standard library ships sqlite3, so it never appears in a

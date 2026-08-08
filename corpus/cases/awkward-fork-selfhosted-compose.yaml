@@ -1,0 +1,59 @@
+id: awkward-fork-selfhosted-compose
+origin: "A fork of an upstream project's deployment repository, holding no application code at all: a compose file pinning the upstream image, the Postgres and Redis it needs, an nginx vhost, and a backup script. Homelab and small team self hosting looks exactly like this. It runs a real always on application backed by a real database, and the repository is nothing but the configuration to do it."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  README.md: |
+    # wiki-deploy (fork)
+
+    Fork of upstream/wiki-deploy with our hostnames and volume paths. Runs
+    Outline behind nginx on a single box. `make up` pulls the pinned image and
+    starts everything; `backup.sh` runs nightly from cron.
+  docker-compose.yml: |
+    services:
+      wiki:
+        image: docker.getoutline.com/outlinewiki/outline:0.80.2
+        env_file: .env
+        depends_on: [postgres, redis]
+        ports:
+          - "127.0.0.1:3000:3000"
+        volumes:
+          - ./storage:/var/lib/outline/data
+      postgres:
+        image: postgres:16-alpine
+        volumes:
+          - ./pgdata:/var/lib/postgresql/data
+      redis:
+        image: redis:7-alpine
+  .env.example: |
+    NODE_ENV=production
+    URL=https://wiki.example.org
+    DATABASE_URL=postgres://outline:changeme@postgres:5432/outline
+    REDIS_URL=redis://redis:6379
+    SECRET_KEY=generate_with_openssl_rand_hex_32
+  nginx/wiki.conf: |
+    server {
+      listen 443 ssl http2;
+      server_name wiki.example.org;
+
+      location / {
+        proxy_pass http://127.0.0.1:3000;
+        proxy_set_header Host $host;
+        proxy_set_header Upgrade $http_upgrade;
+        proxy_set_header Connection "upgrade";
+      }
+    }
+  backup.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+    stamp=$(date +%F)
+    docker compose exec -T postgres pg_dump -U outline outline \
+      | gzip > "/srv/backups/outline-${stamp}.sql.gz"
+    find /srv/backups -name 'outline-*.sql.gz' -mtime +30 -delete
+  Makefile: |
+    up:
+    	docker compose pull && docker compose up -d
+
+    logs:
+    	docker compose logs -f wiki

@@ -1,0 +1,56 @@
+id: gap-django-channels-postgres
+origin: "A Django support console with live agent presence over Django Channels, backed by Postgres. Channels holds a websocket per signed in agent, so the process has to stay up, and the customer data is in a real database. Standard shape for any Django app that grew a realtime panel."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.7
+    channels==4.1.0
+    daphne==4.1.2
+    psycopg[binary]==3.2.1
+    gunicorn==22.0.0
+  config/settings.py: |
+    import os
+
+    INSTALLED_APPS = ["daphne", "django.contrib.auth", "channels", "console"]
+    ASGI_APPLICATION = "config.asgi.application"
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": os.environ["PGDATABASE"],
+            "HOST": os.environ["PGHOST"],
+        }
+    }
+  config/asgi.py: |
+    import os
+    from channels.routing import ProtocolTypeRouter, URLRouter
+    from django.core.asgi import get_asgi_application
+    from console.routing import websocket_urlpatterns
+
+    os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+
+    application = ProtocolTypeRouter(
+        {
+            "http": get_asgi_application(),
+            "websocket": URLRouter(websocket_urlpatterns),
+        }
+    )
+  console/consumers.py: |
+    from channels.generic.websocket import AsyncJsonWebsocketConsumer
+
+    class PresenceConsumer(AsyncJsonWebsocketConsumer):
+        async def connect(self):
+            await self.channel_layer.group_add("agents", self.channel_name)
+            await self.accept()
+
+        async def disconnect(self, code):
+            await self.channel_layer.group_discard("agents", self.channel_name)
+  console/models.py: |
+    from django.db import models
+
+    class Ticket(models.Model):
+        subject = models.CharField(max_length=200)
+        opened_at = models.DateTimeField(auto_now_add=True)
+        assignee = models.CharField(max_length=80, blank=True)

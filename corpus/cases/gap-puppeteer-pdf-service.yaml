@@ -1,0 +1,55 @@
+id: gap-puppeteer-pdf-service
+origin: "An internal service that renders invoice HTML to PDF with headless Chrome. Puppeteer ships a browser and keeps it warm between requests, which needs roughly a gigabyte of memory and a process that stays alive, but there is no model and no database anywhere in it."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "invoice-render",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "puppeteer": "^23.1.0"
+      }
+    }
+  src/browser.js: |
+    import puppeteer from "puppeteer";
+
+    let browser;
+
+    export async function page() {
+      browser ??= await puppeteer.launch({ args: ["--no-sandbox"] });
+      return browser.newPage();
+    }
+  src/server.js: |
+    import express from "express";
+    import { page } from "./browser.js";
+
+    const app = express();
+    app.use(express.text({ type: "text/html", limit: "2mb" }));
+
+    app.post("/render", async (req, res) => {
+      const tab = await page();
+      await tab.setContent(req.body, { waitUntil: "networkidle0" });
+      const pdf = await tab.pdf({ format: "A4", printBackground: true });
+      await tab.close();
+      res.type("application/pdf").send(pdf);
+    });
+
+    app.listen(3000);
+  Dockerfile: |
+    FROM node:20-slim
+    RUN apt-get update && apt-get install -y chromium fonts-liberation
+    ENV PUPPETEER_SKIP_DOWNLOAD=true
+    ENV PUPPETEER_EXECUTABLE_PATH=/usr/bin/chromium
+    COPY . .
+    RUN npm ci --omit=dev
+    CMD ["node", "src/server.js"]
+  README.md: |
+    # invoice-render
+
+    POST the invoice HTML, get a PDF back. Keep one instance warm; launching
+    Chrome per request costs about two seconds and a lot of memory churn.

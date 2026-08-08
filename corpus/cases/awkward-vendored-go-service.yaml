@@ -1,0 +1,79 @@
+id: awkward-vendored-go-service
+origin: "A Go HTTP API that commits `go mod vendor` output so builds are hermetic and work behind a corporate proxy. The vendor tree is by far the largest thing in the repository and belongs to other people. What the repository IS is a stateless chi API talking to Postgres."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  go.mod: |
+    module github.com/northgate/ledger
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/jackc/pgx/v5 v5.6.0
+    )
+  main.go: |
+    package main
+
+    import (
+    	"net/http"
+    	"os"
+
+    	"github.com/go-chi/chi/v5"
+    	"github.com/northgate/ledger/internal/store"
+    )
+
+    func main() {
+    	db := store.MustOpen(os.Getenv("DATABASE_URL"))
+    	r := chi.NewRouter()
+    	r.Get("/entries", store.ListEntries(db))
+    	http.ListenAndServe(":"+os.Getenv("PORT"), r)
+    }
+  internal/store/store.go: |
+    package store
+
+    import (
+    	"context"
+    	"net/http"
+
+    	"github.com/jackc/pgx/v5/pgxpool"
+    )
+
+    func MustOpen(url string) *pgxpool.Pool {
+    	pool, err := pgxpool.New(context.Background(), url)
+    	if err != nil {
+    		panic(err)
+    	}
+    	return pool
+    }
+
+    func ListEntries(db *pgxpool.Pool) http.HandlerFunc {
+    	return func(w http.ResponseWriter, r *http.Request) { w.Write([]byte("[]")) }
+    }
+  vendor/modules.txt: |
+    # github.com/go-chi/chi/v5 v5.0.12
+    ## explicit; go 1.20
+    github.com/go-chi/chi/v5
+    # github.com/jackc/pgx/v5 v5.6.0
+    ## explicit; go 1.20
+    github.com/jackc/pgx/v5
+    github.com/jackc/pgx/v5/pgxpool
+  vendor/github.com/go-chi/chi/v5/mux.go: |
+    package chi
+
+    // Vendored copy. Do not edit; run `go mod vendor` instead.
+    type Mux struct {
+    	handler interface{}
+    }
+  Makefile: |
+    build:
+    	go build -mod=vendor -o bin/ledger .
+
+    vendor:
+    	go mod vendor && git add vendor
+  README.md: |
+    # ledger
+
+    Vendored on purpose: our build machines have no network access, so
+    `vendor/` is committed and CI builds with `-mod=vendor`.

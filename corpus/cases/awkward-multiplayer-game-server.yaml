@@ -1,0 +1,62 @@
+id: awkward-multiplayer-game-server
+origin: "A small .io style multiplayer game: one Node process serving the client files and running the authoritative game loop over websockets. The loop ticks whether or not a request just arrived, and every player holds a socket open, so this needs a process that stays up. No database: the world lives in memory and is gone when the process restarts."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "orbit-arena",
+      "private": true,
+      "dependencies": {
+        "express": "^4.19.2",
+        "ws": "^8.18.0"
+      }
+    }
+  server.js: |
+    const express = require("express");
+    const { WebSocketServer } = require("ws");
+
+    const app = express();
+    app.use(express.static("public"));
+    const server = app.listen(process.env.PORT || 8080);
+
+    const wss = new WebSocketServer({ server });
+    const players = new Map();
+
+    wss.on("connection", (socket) => {
+      const id = Math.random().toString(36).slice(2);
+      players.set(id, { x: 0, y: 0 });
+      socket.on("message", (raw) => Object.assign(players.get(id), JSON.parse(raw)));
+      socket.on("close", () => players.delete(id));
+    });
+
+    setInterval(() => {
+      const state = JSON.stringify([...players.entries()]);
+      for (const client of wss.clients) client.send(state);
+    }, 33);
+  public/index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Orbit Arena</title></head>
+      <body>
+        <canvas id="view" width="960" height="540"></canvas>
+        <script src="/client.js"></script>
+      </body>
+    </html>
+  public/client.js: |
+    const socket = new WebSocket(`ws://${location.host}`);
+    const view = document.getElementById("view").getContext("2d");
+
+    socket.onmessage = (event) => {
+      const players = JSON.parse(event.data);
+      view.clearRect(0, 0, 960, 540);
+      for (const [, p] of players) view.fillRect(p.x, p.y, 8, 8);
+    };
+
+    addEventListener("mousemove", (e) => socket.send(JSON.stringify({ x: e.clientX, y: e.clientY })));
+  README.md: |
+    # orbit-arena
+
+    `node server.js`. The tick runs at 30hz and broadcasts to everyone
+    connected. State is in memory on purpose; a restart clears the arena.

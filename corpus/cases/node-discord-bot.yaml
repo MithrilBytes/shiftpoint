@@ -1,0 +1,54 @@
+id: node-discord-bot
+origin: "A discord.js gateway bot for a community server. It logs in once and holds that connection open for as long as it is running, so it is a process somebody has to host even though it serves no HTTP traffic."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "welcome-bot",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/index.js" },
+      "dependencies": {
+        "discord.js": "^14.16.1",
+        "dotenv": "^16.4.5"
+      }
+    }
+  src/index.js: |
+    import "dotenv/config";
+    import { Client, Events, GatewayIntentBits } from "discord.js";
+    import { commands } from "./commands.js";
+
+    const client = new Client({
+      intents: [GatewayIntentBits.Guilds, GatewayIntentBits.GuildMembers],
+    });
+
+    client.once(Events.ClientReady, (ready) => {
+      console.log(`logged in as ${ready.user.tag}`);
+    });
+
+    client.on(Events.InteractionCreate, async (interaction) => {
+      if (!interaction.isChatInputCommand()) return;
+      await commands[interaction.commandName]?.(interaction);
+    });
+
+    client.login(process.env.DISCORD_TOKEN);
+  src/commands.js: |
+    export const commands = {
+      async ping(interaction) {
+        await interaction.reply("pong");
+      },
+      async rules(interaction) {
+        await interaction.reply("Be kind. Stay on topic. No crypto.");
+      },
+    };
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/index.js"]
+  .env.example: |
+    DISCORD_TOKEN=

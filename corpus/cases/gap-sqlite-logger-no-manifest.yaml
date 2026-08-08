@@ -1,0 +1,54 @@
+id: gap-sqlite-logger-no-manifest
+origin: "A greenhouse sensor logger: one standard library Python file reading a serial port in a loop and appending rows to a SQLite file, kept alive by a systemd unit on the box in the shed. No dependency manifest because it needs nothing outside the standard library."
+expect:
+  stage: script-needing-a-server
+  flags: []
+files:
+  logger.py: |
+    import sqlite3
+    import time
+    from serial_read import read_frame
+
+    conn = sqlite3.connect("/var/lib/greenhouse/readings.db")
+
+    while True:
+        frame = read_frame("/dev/ttyUSB0")
+        conn.execute(
+            "insert into readings (taken_at, celsius, humidity) values (?, ?, ?)",
+            (int(time.time()), frame.celsius, frame.humidity),
+        )
+        conn.commit()
+        time.sleep(30)
+  serial_read.py: |
+    from dataclasses import dataclass
+
+    @dataclass
+    class Frame:
+        celsius: float
+        humidity: float
+
+    def read_frame(device):
+        with open(device, "r") as port:
+            celsius, humidity = port.readline().strip().split(",")
+        return Frame(float(celsius), float(humidity))
+  schema.sql: |
+    create table if not exists readings (
+      taken_at integer primary key,
+      celsius real not null,
+      humidity real not null
+    );
+  greenhouse.service: |
+    [Unit]
+    Description=Greenhouse sensor logger
+
+    [Service]
+    ExecStart=/usr/bin/python3 /opt/greenhouse/logger.py
+    Restart=always
+
+    [Install]
+    WantedBy=multi-user.target
+  README.md: |
+    # greenhouse
+
+    Runs on the Pi in the shed. `systemctl enable --now greenhouse` and it logs
+    forever. Copy readings.db off with scp when you want to plot something.

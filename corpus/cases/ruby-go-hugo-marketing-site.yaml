@@ -1,0 +1,41 @@
+id: ruby-go-hugo-marketing-site
+origin: "A Hugo site using an installed theme, which is how most Hugo sites are laid out. Hugo generates every page from Markdown at build time, so no index.html is checked in and there is no dependency manifest at all."
+expect:
+  stage: static-site
+  flags: []
+files:
+  hugo.toml: |
+    baseURL = "https://example.com/"
+    languageCode = "en-gb"
+    title = "Kestrel Instruments"
+    theme = "ananke"
+
+    [params]
+      description = "Field instruments, built in Sheffield."
+  content/_index.md: |
+    ---
+    title: "Kestrel Instruments"
+    ---
+
+    We build field instruments that survive being dropped.
+  content/products/anemometer.md: |
+    ---
+    title: "Handheld anemometer"
+    date: 2026-01-14
+    ---
+
+    Reads to 40 m/s. Runs eleven hours on one charge.
+  content/about.md: |
+    ---
+    title: "About"
+    ---
+
+    Six people in a workshop off Attercliffe Road.
+  archetypes/default.md: |
+    ---
+    title: "{{ replace .Name "-" " " | title }}"
+    draft: true
+    ---
+  static/css/extra.css: |
+    :root { --brand: #1c4b3c; }
+    .site-title { color: var(--brand); }

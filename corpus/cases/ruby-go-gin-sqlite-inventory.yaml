@@ -1,0 +1,61 @@
+id: ruby-go-gin-sqlite-inventory
+origin: "A small Gin service for a workshop's inventory, keeping everything in a SQLite file on the machine it runs on. Common for internal tools that never need a second box."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/inventory
+
+    go 1.22
+
+    require (
+    	github.com/gin-gonic/gin v1.10.0
+    	modernc.org/sqlite v1.29.10
+    )
+  main.go: |
+    package main
+
+    import (
+    	"database/sql"
+
+    	"github.com/gin-gonic/gin"
+    	_ "modernc.org/sqlite"
+    )
+
+    func main() {
+    	db, err := sql.Open("sqlite", "/var/lib/inventory/inventory.db")
+    	if err != nil {
+    		panic(err)
+    	}
+    	r := gin.Default()
+    	r.GET("/parts", listParts(db))
+    	r.Run(":8080")
+    }
+  internal/store/parts.go: |
+    package store
+
+    import "database/sql"
+
+    type Store struct{ DB *sql.DB }
+
+    func (s Store) Count() (int, error) {
+    	var n int
+    	err := s.DB.QueryRow("select count(*) from parts").Scan(&n)
+    	return n, err
+    }
+  schema.sql: |
+    create table if not exists parts (
+      sku text primary key,
+      name text not null,
+      on_hand integer not null default 0
+    );
+  Dockerfile: |
+    FROM golang:1.22 AS build
+    WORKDIR /src
+    COPY . .
+    RUN go build -o /out/inventory .
+
+    FROM gcr.io/distroless/base-debian12
+    COPY --from=build /out/inventory /inventory
+    ENTRYPOINT ["/inventory"]

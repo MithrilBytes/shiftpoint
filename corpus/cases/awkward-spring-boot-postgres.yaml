@@ -1,0 +1,86 @@
+id: awkward-spring-boot-postgres
+origin: "A Spring Boot service on Postgres, built with Maven and shipped as a container. Enormously common inside companies, and another framework this tool has no reader for. A JVM service of this shape wants a machine that stays warm; it is not a candidate for a free function tier."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  pom.xml: |
+    <?xml version="1.0" encoding="UTF-8"?>
+    <project xmlns="http://maven.apache.org/POM/4.0.0">
+      <modelVersion>4.0.0</modelVersion>
+      <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.2</version>
+      </parent>
+      <groupId>com.northwind</groupId>
+      <artifactId>orders</artifactId>
+      <version>1.4.0</version>
+      <dependencies>
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+          <groupId>org.postgresql</groupId>
+          <artifactId>postgresql</artifactId>
+          <scope>runtime</scope>
+        </dependency>
+      </dependencies>
+    </project>
+  src/main/java/com/northwind/orders/OrdersApplication.java: |
+    package com.northwind.orders;
+
+    import org.springframework.boot.SpringApplication;
+    import org.springframework.boot.autoconfigure.SpringBootApplication;
+
+    @SpringBootApplication
+    public class OrdersApplication {
+        public static void main(String[] args) {
+            SpringApplication.run(OrdersApplication.class, args);
+        }
+    }
+  src/main/java/com/northwind/orders/OrderController.java: |
+    package com.northwind.orders;
+
+    import java.util.List;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    public class OrderController {
+        private final OrderRepository orders;
+
+        OrderController(OrderRepository orders) {
+            this.orders = orders;
+        }
+
+        @GetMapping("/orders")
+        List<Order> all() {
+            return orders.findAll();
+        }
+    }
+  src/main/resources/application.yml: |
+    spring:
+      datasource:
+        url: jdbc:postgresql://${DB_HOST:localhost}:5432/orders
+        username: ${DB_USER:orders}
+        password: ${DB_PASSWORD:}
+      jpa:
+        hibernate:
+          ddl-auto: validate
+    server:
+      port: 8080
+  Dockerfile: |
+    FROM eclipse-temurin:21-jre
+    WORKDIR /app
+    COPY target/orders-1.4.0.jar app.jar
+    ENTRYPOINT ["java", "-jar", "/app/app.jar"]
+  README.md: |
+    # orders
+
+    Spring Boot 3.3 on Java 21, Postgres 16. `./mvnw spring-boot:run` locally.

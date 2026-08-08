@@ -1,0 +1,46 @@
+id: static-docs-sphinx-readthedocs
+origin: "A standalone Sphinx documentation repository, the shape a Python project uses when its docs live apart from its source. `make html` produces static HTML that Read the Docs or GitHub Pages serves. conf.py is Sphinx configuration, not an application."
+expect:
+  stage: static-site
+  flags: []
+files:
+  requirements.txt: |
+    sphinx==7.4.7
+    furo==2024.8.6
+    myst-parser==4.0.0
+  conf.py: |
+    project = "Ashgrove"
+    author = "Ashgrove contributors"
+    extensions = ["myst_parser", "sphinx.ext.autodoc"]
+    html_theme = "furo"
+    exclude_patterns = ["_build"]
+  index.rst: |
+    Ashgrove
+    ========
+
+    .. toctree::
+       :maxdepth: 2
+
+       install
+       usage
+  install.rst: |
+    Install
+    =======
+
+    ``pip install ashgrove``
+  usage.rst: |
+    Usage
+    =====
+
+    Point it at a directory of CSV exports and it returns a tidy frame.
+  Makefile: |
+    html:
+    	sphinx-build -b html . _build/html
+  .readthedocs.yaml: |
+    version: 2
+    build:
+      os: ubuntu-24.04
+      tools:
+        python: "3.12"
+    sphinx:
+      configuration: conf.py

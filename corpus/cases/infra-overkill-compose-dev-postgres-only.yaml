@@ -1,0 +1,51 @@
+id: infra-overkill-compose-dev-postgres-only
+origin: >-
+  A FastAPI service whose docker-compose.yml exists only so a developer can get
+  a Postgres on their laptop with one command. The application itself is not in
+  the compose file at all, and deployment happens somewhere else entirely.
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn[standard]==0.30.1
+    sqlalchemy==2.0.31
+    psycopg2-binary==2.9.9
+  app/main.py: |
+    from fastapi import FastAPI
+    from sqlalchemy import create_engine, text
+    import os
+
+    engine = create_engine(os.environ["DATABASE_URL"])
+    app = FastAPI()
+
+    @app.get("/plants")
+    def plants():
+        with engine.connect() as conn:
+            rows = conn.execute(text("select id, name from plants")).mappings().all()
+        return [dict(row) for row in rows]
+  docker-compose.yml: |
+    services:
+      db:
+        image: postgres:16
+        environment:
+          POSTGRES_USER: plants
+          POSTGRES_PASSWORD: plants
+          POSTGRES_DB: plants
+        ports:
+          - "5432:5432"
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+
+    volumes:
+      pgdata:
+  .env.example: |
+    DATABASE_URL=postgresql://plants:plants@localhost:5432/plants
+  README.md: |
+    # plants
+
+    ## Local development
+
+    `docker compose up -d` starts a Postgres on 5432. That is all the compose
+    file is for. Then `uvicorn app.main:app --reload`.

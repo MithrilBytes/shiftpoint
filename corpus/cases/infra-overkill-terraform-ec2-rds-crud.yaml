@@ -1,0 +1,73 @@
+id: infra-overkill-terraform-ec2-rds-crud
+origin: >-
+  A small Express CRUD app with Postgres. The repository carries Terraform that
+  rents an EC2 instance and an RDS Postgres instance, a shape a lot of people
+  copy out of a tutorial for their first deploy.
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "bookmarks",
+      "version": "0.3.0",
+      "private": true,
+      "scripts": { "start": "node server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "pg": "^8.11.5"
+      }
+    }
+  server.js: |
+    const express = require("express");
+    const { Pool } = require("pg");
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const app = express();
+
+    app.get("/bookmarks", async (_req, res) => {
+      const { rows } = await pool.query("select id, url, title from bookmarks order by id");
+      res.json(rows);
+    });
+
+    app.listen(process.env.PORT || 3000);
+  infra/main.tf: |
+    resource "aws_instance" "app" {
+      ami           = var.ami
+      instance_type = "t3.small"
+      tags = {
+        Name = "bookmarks-app"
+      }
+    }
+
+    resource "aws_db_instance" "postgres" {
+      identifier           = "bookmarks"
+      engine               = "postgres"
+      engine_version       = "16.3"
+      instance_class       = "db.t4g.micro"
+      allocated_storage    = 20
+      username             = var.db_username
+      password             = var.db_password
+      skip_final_snapshot  = true
+    }
+  infra/variables.tf: |
+    variable "ami" {
+      type = string
+    }
+
+    variable "db_username" {
+      type = string
+    }
+
+    variable "db_password" {
+      type      = string
+      sensitive = true
+    }
+  .env.example: |
+    DATABASE_URL=postgres://bookmarks:changeme@localhost:5432/bookmarks
+    PORT=3000
+  README.md: |
+    # bookmarks
+
+    Save and list links. `terraform -chdir=infra apply` brings up the instance
+    and the database.

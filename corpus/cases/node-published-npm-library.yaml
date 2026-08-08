@@ -1,0 +1,59 @@
+id: node-published-npm-library
+origin: "A small TypeScript utility published to npm. It has no entry point of its own: everything here exists to be imported by somebody else's build."
+expect:
+  stage: library
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "@bramble/interval",
+      "version": "1.4.0",
+      "description": "Merge and subtract half open intervals.",
+      "license": "MIT",
+      "type": "module",
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+      "files": ["dist"],
+      "sideEffects": false,
+      "scripts": { "build": "tsc -p tsconfig.json", "test": "vitest run" },
+      "devDependencies": { "typescript": "^5.5.4", "vitest": "^2.0.5" }
+    }
+  tsconfig.json: |
+    {
+      "compilerOptions": {
+        "target": "ES2022",
+        "module": "NodeNext",
+        "declaration": true,
+        "outDir": "dist",
+        "strict": true
+      },
+      "include": ["src"]
+    }
+  src/index.ts: |
+    export interface Interval {
+      start: number;
+      end: number;
+    }
+
+    export function merge(intervals: Interval[]): Interval[] {
+      const sorted = [...intervals].sort((a, b) => a.start - b.start);
+      const out: Interval[] = [];
+
+      for (const next of sorted) {
+        const last = out[out.length - 1];
+        if (last && next.start <= last.end) last.end = Math.max(last.end, next.end);
+        else out.push({ ...next });
+      }
+
+      return out;
+    }
+  src/index.test.ts: |
+    import { expect, test } from "vitest";
+    import { merge } from "./index.js";
+
+    test("merges overlapping intervals", () => {
+      expect(merge([{ start: 0, end: 3 }, { start: 2, end: 5 }])).toEqual([
+        { start: 0, end: 5 },
+      ]);
+    });

@@ -1,0 +1,57 @@
+id: ruby-go-cobra-release-notes-cli
+origin: "A Go command line tool built on Cobra and shipped with GoReleaser, installed with `go install`. Nothing here is served to anyone."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/relnotes
+
+    go 1.22
+
+    require (
+    	github.com/spf13/cobra v1.8.0
+    	github.com/fatih/color v1.17.0
+    )
+  cmd/relnotes/main.go: |
+    package main
+
+    import "github.com/example/relnotes/internal/cli"
+
+    func main() {
+    	cli.Execute()
+    }
+  internal/cli/root.go: |
+    package cli
+
+    import (
+    	"fmt"
+
+    	"github.com/spf13/cobra"
+    )
+
+    var root = &cobra.Command{
+    	Use:   "relnotes",
+    	Short: "Build release notes from merged pull requests",
+    	RunE: func(cmd *cobra.Command, args []string) error {
+    		fmt.Println("relnotes")
+    		return nil
+    	},
+    }
+
+    func Execute() { _ = root.Execute() }
+  .goreleaser.yaml: |
+    builds:
+      - main: ./cmd/relnotes
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    archives:
+      - format: tar.gz
+  README.md: |
+    # relnotes
+
+    Install it:
+
+        go install github.com/example/relnotes/cmd/relnotes@latest
+
+    Then run `relnotes --since v1.4.0` in a checkout.

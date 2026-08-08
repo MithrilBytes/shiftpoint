@@ -1,0 +1,50 @@
+id: ruby-go-fiber-compose-dev-stack
+origin: "A stateless Fiber API that caches upstream responses in Redis, with a compose file so contributors get the same stack locally. One application service, nothing that has to stay running."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [composed-stack-that-runs-free]
+files:
+  go.mod: |
+    module github.com/example/tides
+
+    go 1.22
+
+    require (
+    	github.com/gofiber/fiber/v2 v2.52.5
+    	github.com/redis/go-redis/v9 v9.5.3
+    )
+  main.go: |
+    package main
+
+    import (
+    	"os"
+
+    	"github.com/gofiber/fiber/v2"
+    	"github.com/redis/go-redis/v9"
+    )
+
+    func main() {
+    	rdb := redis.NewClient(&redis.Options{Addr: os.Getenv("REDIS_ADDR")})
+    	app := fiber.New()
+    	app.Get("/tides/:port", tidesFor(rdb))
+    	app.Listen(":8080")
+    }
+  docker-compose.yml: |
+    services:
+      api:
+        build: .
+        ports:
+          - "8080:8080"
+        environment:
+          REDIS_ADDR: redis:6379
+      redis:
+        image: redis:7-alpine
+  Dockerfile: |
+    FROM golang:1.22 AS build
+    WORKDIR /src
+    COPY . .
+    RUN go build -o /out/tides .
+
+    FROM gcr.io/distroless/static-debian12
+    COPY --from=build /out/tides /tides
+    ENTRYPOINT ["/tides"]

@@ -1,0 +1,42 @@
+id: python-flask-rq-worker
+origin: "Flask upload endpoint that hands thumbnailing to an RQ worker on Redis, the lighter alternative people pick over Celery."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  requirements.txt: |
+    Flask==3.0.3
+    rq==1.16.2
+    redis==5.0.7
+    Pillow==10.4.0
+    gunicorn==22.0.0
+  app.py: |
+    import os
+    from flask import Flask, request
+    from redis import Redis
+    from rq import Queue
+    from tasks import make_thumbnail
+
+    app = Flask(__name__)
+    queue = Queue(connection=Redis.from_url(os.environ["REDIS_URL"]))
+
+    @app.post("/uploads")
+    def upload():
+        key = request.form["key"]
+        queue.enqueue(make_thumbnail, key)
+        return {"queued": key}, 202
+  tasks.py: |
+    from PIL import Image
+
+    def make_thumbnail(key):
+        image = Image.open(f"/data/{key}")
+        image.thumbnail((320, 320))
+        image.save(f"/data/thumb-{key}")
+  worker.py: |
+    import os
+    from redis import Redis
+    from rq import Worker
+
+    Worker(["default"], connection=Redis.from_url(os.environ["REDIS_URL"])).work()
+  .env.example: |
+    REDIS_URL=redis://localhost:6379/0

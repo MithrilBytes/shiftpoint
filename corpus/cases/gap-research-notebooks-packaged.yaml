@@ -1,0 +1,53 @@
+id: gap-research-notebooks-packaged
+origin: "A reproducible research repository: notebooks that produce the figures for a paper, plus a pyproject.toml that exists to pin versions and make the shared helpers importable from the notebooks. Packaging here is for reproducibility, not distribution, and nothing in it is ever deployed."
+expect:
+  stage: notebook
+  flags: []
+files:
+  pyproject.toml: |
+    [project]
+    name = "tidal-analysis"
+    version = "0.1.0"
+    requires-python = ">=3.11"
+    dependencies = ["pandas==2.2.2", "matplotlib==3.9.1", "statsmodels==0.14.2"]
+
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+  notebooks/01-clean-gauge-data.ipynb: |
+    {
+     "cells": [
+      {"cell_type": "code", "source": ["import pandas as pd\n", "gauges = pd.read_csv('../data/gauges.csv')\n"], "outputs": [], "execution_count": 1, "metadata": {}}
+     ],
+     "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  notebooks/02-harmonic-fit.ipynb: |
+    {
+     "cells": [
+      {"cell_type": "code", "source": ["from tidal.harmonics import fit\n", "constituents = fit(gauges)\n"], "outputs": [], "execution_count": 1, "metadata": {}}
+     ],
+     "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  src/tidal/harmonics.py: |
+    import numpy as np
+
+    def fit(frame, constituents=("M2", "S2", "N2", "K1")):
+        """Least squares fit of the named tidal constituents to a gauge series."""
+        hours = frame["hours"].to_numpy()
+        design = np.column_stack([np.cos(2 * np.pi * hours / 12.42) for _ in constituents])
+        coefficients, *_ = np.linalg.lstsq(design, frame["metres"].to_numpy(), rcond=None)
+        return dict(zip(constituents, coefficients))
+  data/gauges.csv: |
+    station,hours,metres
+    newlyn,0,1.82
+    newlyn,1,2.41
+    newlyn,2,2.94
+  README.md: |
+    # tidal-analysis
+
+    Figures 2 through 5 of the paper. Run the notebooks in order. `pip install
+    -e .` first so the notebooks can import `tidal`.

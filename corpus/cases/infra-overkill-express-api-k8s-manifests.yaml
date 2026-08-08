@@ -1,0 +1,65 @@
+id: infra-overkill-express-api-k8s-manifests
+origin: >-
+  A small internal Express JSON API. No database, no queue, one endpoint set.
+  Someone checked in hand written Kubernetes manifests because that is how the
+  company deploys everything.
+expect:
+  stage: app-on-free-managed-hosting
+  flags:
+    - kubernetes-without-demand
+files:
+  package.json: |
+    {
+      "name": "status-api",
+      "version": "1.2.0",
+      "private": true,
+      "scripts": { "start": "node server.js" },
+      "dependencies": { "express": "^4.19.2" }
+    }
+  server.js: |
+    const express = require("express");
+    const app = express();
+    app.get("/healthz", (_req, res) => res.json({ ok: true }));
+    app.get("/status", (_req, res) => res.json({ region: "iad", build: process.env.BUILD }));
+    app.listen(process.env.PORT || 3000);
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY . .
+    RUN npm ci --omit=dev
+    CMD ["node", "server.js"]
+  k8s/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: status-api
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: status-api
+      template:
+        metadata:
+          labels:
+            app: status-api
+        spec:
+          containers:
+            - name: status-api
+              image: registry.internal/status-api:1.2.0
+              ports:
+                - containerPort: 3000
+  k8s/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: status-api
+    spec:
+      selector:
+        app: status-api
+      ports:
+        - port: 80
+          targetPort: 3000
+  README.md: |
+    # status-api
+
+    Returns build and region metadata. Deployed with `kubectl apply -f k8s/`.

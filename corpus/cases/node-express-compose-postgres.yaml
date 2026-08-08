@@ -1,0 +1,67 @@
+id: node-express-compose-postgres
+origin: "An Express API with a compose file that brings up the app, Postgres, and Redis together. Written for local development, but it is also how this team deploys: onto one rented box running docker compose up."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: [composed-stack-that-runs-free]
+files:
+  package.json: |
+    {
+      "name": "bookings",
+      "private": true,
+      "type": "commonjs",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "pg": "^8.12.0",
+        "ioredis": "^5.4.1"
+      }
+    }
+  src/server.js: |
+    const express = require("express");
+    const { Pool } = require("pg");
+    const Redis = require("ioredis");
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const cache = new Redis(process.env.REDIS_URL);
+    const app = express();
+
+    app.get("/slots/:day", async (req, res) => {
+      const cached = await cache.get(req.params.day);
+      if (cached) return res.type("json").send(cached);
+      const { rows } = await pool.query("select * from slots where day = $1", [req.params.day]);
+      await cache.set(req.params.day, JSON.stringify(rows), "EX", 60);
+      res.json(rows);
+    });
+
+    app.listen(3000);
+  docker-compose.yml: |
+    services:
+      api:
+        build: .
+        ports:
+          - "3000:3000"
+        environment:
+          DATABASE_URL: postgres://bookings:bookings@db:5432/bookings
+          REDIS_URL: redis://cache:6379
+        depends_on:
+          - db
+          - cache
+      db:
+        image: postgres:16
+        environment:
+          POSTGRES_USER: bookings
+          POSTGRES_PASSWORD: bookings
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+      cache:
+        image: redis:7
+
+    volumes:
+      pgdata:
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/server.js"]

@@ -1,0 +1,49 @@
+id: node-websocket-server
+origin: "A presence server for a collaborative editor: Express serves a health check and ws holds one socket open per connected editor. State lives in memory for the life of the process."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "presence",
+      "private": true,
+      "type": "commonjs",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "ws": "^8.18.0"
+      }
+    }
+  src/server.js: |
+    const http = require("node:http");
+    const express = require("express");
+    const { attach } = require("./sockets");
+
+    const app = express();
+    app.get("/health", (_req, res) => res.json({ ok: true }));
+
+    const server = http.createServer(app);
+    attach(server);
+    server.listen(process.env.PORT || 8080);
+  src/sockets.js: |
+    const { WebSocketServer } = require("ws");
+
+    const rooms = new Map();
+
+    exports.attach = (server) => {
+      const wss = new WebSocketServer({ server });
+
+      wss.on("connection", (socket, request) => {
+        const room = new URL(request.url, "http://localhost").searchParams.get("room");
+        const members = rooms.get(room) ?? new Set();
+        members.add(socket);
+        rooms.set(room, members);
+
+        socket.on("message", (data) => {
+          for (const peer of members) if (peer !== socket) peer.send(data);
+        });
+
+        socket.on("close", () => members.delete(socket));
+      });
+    };

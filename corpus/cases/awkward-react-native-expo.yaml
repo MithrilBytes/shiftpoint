@@ -1,0 +1,72 @@
+id: awkward-react-native-expo
+origin: "An Expo React Native app with no backend of its own: it reads a public transit API and caches results with AsyncStorage. The manifest is a package.json full of JavaScript dependencies, which makes it look like every hostable Node project, and it is a client that runs on phones."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "nextbus",
+      "private": true,
+      "main": "expo-router/entry",
+      "scripts": {
+        "start": "expo start",
+        "android": "expo run:android"
+      },
+      "dependencies": {
+        "expo": "~51.0.24",
+        "expo-router": "~3.5.20",
+        "react": "18.2.0",
+        "react-native": "0.74.3",
+        "@react-native-async-storage/async-storage": "1.23.1"
+      }
+    }
+  app.json: |
+    {
+      "expo": {
+        "name": "NextBus",
+        "slug": "nextbus",
+        "scheme": "nextbus",
+        "ios": { "bundleIdentifier": "org.example.nextbus" },
+        "android": { "package": "org.example.nextbus" }
+      }
+    }
+  app/index.tsx: |
+    import { useEffect, useState } from "react";
+    import { FlatList, Text, View } from "react-native";
+    import { departures } from "../src/transit";
+
+    export default function Home() {
+      const [rows, setRows] = useState<string[]>([]);
+      useEffect(() => {
+        departures("stop_4412").then(setRows);
+      }, []);
+      return (
+        <View>
+          <FlatList data={rows} renderItem={({ item }) => <Text>{item}</Text>} />
+        </View>
+      );
+    }
+  src/transit.ts: |
+    import AsyncStorage from "@react-native-async-storage/async-storage";
+
+    const API = "https://api.transit.example.org/v1";
+
+    export async function departures(stop: string): Promise<string[]> {
+      const cached = await AsyncStorage.getItem(stop);
+      if (cached) return JSON.parse(cached);
+      const response = await fetch(`${API}/stops/${stop}/departures`);
+      const rows = await response.json();
+      await AsyncStorage.setItem(stop, JSON.stringify(rows));
+      return rows;
+    }
+  babel.config.js: |
+    module.exports = function (api) {
+      api.cache(true);
+      return { presets: ["babel-preset-expo"] };
+    };
+  README.md: |
+    # nextbus
+
+    `npx expo start`. Talks straight to the city's public API from the phone.
+    There is no server of ours anywhere in this app.

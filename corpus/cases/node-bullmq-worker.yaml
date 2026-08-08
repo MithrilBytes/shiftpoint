@@ -1,0 +1,54 @@
+id: node-bullmq-worker
+origin: "A standalone BullMQ worker that resizes uploaded images. The API that enqueues the jobs lives in another repository; this one is nothing but the consumer and the queue definition it shares."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "image-worker",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/worker.js" },
+      "dependencies": {
+        "bullmq": "^5.12.12",
+        "ioredis": "^5.4.1",
+        "sharp": "^0.33.5",
+        "@aws-sdk/client-s3": "^3.637.0"
+      }
+    }
+  src/queue.js: |
+    import IORedis from "ioredis";
+
+    export const connection = new IORedis(process.env.REDIS_URL, {
+      maxRetriesPerRequest: null,
+    });
+
+    export const QUEUE_NAME = "image-resize";
+  src/worker.js: |
+    import { Worker } from "bullmq";
+    import { connection, QUEUE_NAME } from "./queue.js";
+    import { resize } from "./resize.js";
+
+    const worker = new Worker(QUEUE_NAME, async (job) => resize(job.data), {
+      connection,
+      concurrency: 4,
+    });
+
+    worker.on("failed", (job, error) => {
+      console.error("job failed", job?.id, error.message);
+    });
+  src/resize.js: |
+    import sharp from "sharp";
+    import { S3Client, GetObjectCommand, PutObjectCommand } from "@aws-sdk/client-s3";
+
+    const s3 = new S3Client({});
+
+    export async function resize({ bucket, key, width }) {
+      const source = await s3.send(new GetObjectCommand({ Bucket: bucket, Key: key }));
+      const body = await source.Body.transformToByteArray();
+      const out = await sharp(body).resize(width).webp().toBuffer();
+      await s3.send(new PutObjectCommand({ Bucket: bucket, Key: `${key}.${width}.webp`, Body: out }));
+    }
+  .env.example: |
+    REDIS_URL=redis://localhost:6379

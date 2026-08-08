@@ -1,0 +1,41 @@
+id: python-scheduled-script-no-manifest
+origin: "One stdlib-only Python file run on a nightly schedule to refresh a CSV, with no dependency file because it never needed one."
+expect:
+  stage: script-on-free-functions
+  flags: []
+files:
+  sync_prices.py: |
+    import csv
+    import json
+    import urllib.request
+    from datetime import date
+
+    FEED = "https://example.org/feeds/prices.json"
+
+    def main():
+        with urllib.request.urlopen(FEED) as response:
+            prices = json.load(response)
+        with open("prices.csv", "w", newline="") as handle:
+            writer = csv.writer(handle)
+            writer.writerow(["date", "symbol", "close"])
+            for symbol, close in sorted(prices.items()):
+                writer.writerow([date.today().isoformat(), symbol, close])
+
+    if __name__ == "__main__":
+        main()
+  .github/workflows/sync.yml: |
+    name: sync
+    on:
+      schedule:
+        - cron: "17 3 * * *"
+    jobs:
+      sync:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: python sync_prices.py
+  README.md: |
+    # prices
+
+    Runs once a night and rewrites `prices.csv`. No dependencies beyond the
+    standard library.

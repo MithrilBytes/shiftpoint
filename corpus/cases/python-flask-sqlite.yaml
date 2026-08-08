@@ -1,0 +1,36 @@
+id: python-flask-sqlite
+origin: "Flask link shortener keeping everything in one SQLite file on the box it runs on."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  requirements.txt: |
+    Flask==3.0.3
+    gunicorn==22.0.0
+  app.py: |
+    import sqlite3
+    from flask import Flask, redirect, request
+
+    app = Flask(__name__)
+
+    def db():
+        return sqlite3.connect("links.db")
+
+    @app.get("/<slug>")
+    def follow(slug):
+        row = db().execute("select url from links where slug = ?", (slug,)).fetchone()
+        return redirect(row[0]) if row else ("not found", 404)
+
+    @app.post("/links")
+    def create():
+        with db() as conn:
+            conn.execute(
+                "insert into links (slug, url) values (?, ?)",
+                (request.form["slug"], request.form["url"]),
+            )
+        return "", 201
+  schema.sql: |
+    create table if not exists links (
+      slug text primary key,
+      url text not null
+    );

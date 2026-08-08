@@ -1,0 +1,79 @@
+id: ruby-go-monorepo-three-services
+origin: "A Go workspace holding three separately deployable services behind a gateway, sharing one Postgres. The usual result of a team splitting a Go backend up."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  go.work: |
+    go 1.22
+
+    use (
+    	./services/gateway
+    	./services/accounts
+    	./services/billing
+    )
+  services/gateway/go.mod: |
+    module github.com/example/platform/gateway
+
+    go 1.22
+
+    require github.com/gin-gonic/gin v1.10.0
+  services/gateway/main.go: |
+    package main
+
+    import "github.com/gin-gonic/gin"
+
+    func main() {
+    	r := gin.Default()
+    	r.Any("/accounts/*path", proxyTo("http://accounts:8080"))
+    	r.Any("/billing/*path", proxyTo("http://billing:8080"))
+    	r.Run(":8080")
+    }
+  services/accounts/go.mod: |
+    module github.com/example/platform/accounts
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/jackc/pgx/v5 v5.6.0
+    )
+  services/accounts/main.go: |
+    package main
+
+    import (
+    	"context"
+    	"net/http"
+    	"os"
+
+    	"github.com/go-chi/chi/v5"
+    	"github.com/jackc/pgx/v5/pgxpool"
+    )
+
+    func main() {
+    	pool, _ := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+    	r := chi.NewRouter()
+    	r.Get("/accounts/{id}", showAccount(pool))
+    	http.ListenAndServe(":8080", r)
+    }
+  services/billing/go.mod: |
+    module github.com/example/platform/billing
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/jackc/pgx/v5 v5.6.0
+    )
+  docker-compose.yml: |
+    services:
+      gateway:
+        build: ./services/gateway
+        ports:
+          - "8080:8080"
+      accounts:
+        build: ./services/accounts
+      billing:
+        build: ./services/billing
+      db:
+        image: postgres:16

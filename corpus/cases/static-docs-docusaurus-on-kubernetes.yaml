@@ -1,0 +1,65 @@
+id: static-docs-docusaurus-on-kubernetes
+origin: "An internal Docusaurus documentation site deployed to the company Kubernetes cluster, because that is where the platform team deploys everything. The site is still a folder of HTML: the cluster is policy, not need."
+expect:
+  stage: static-site
+  flags: [kubernetes-without-demand]
+files:
+  package.json: |
+    {
+      "name": "platform-docs",
+      "private": true,
+      "scripts": { "build": "docusaurus build" },
+      "dependencies": {
+        "@docusaurus/core": "^3.5.2",
+        "@docusaurus/preset-classic": "^3.5.2",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+      }
+    }
+  docusaurus.config.js: |
+    export default {
+      title: "Platform Docs",
+      url: "https://docs.internal.example",
+      baseUrl: "/",
+    };
+  docs/runbooks.md: |
+    # Runbooks
+
+    One page per alert. If an alert has no page, it should not page anyone.
+  Dockerfile: |
+    FROM node:20-alpine AS build
+    WORKDIR /app
+    COPY . .
+    RUN npm ci && npm run build
+
+    FROM nginx:alpine
+    COPY --from=build /app/build /usr/share/nginx/html
+  k8s/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: platform-docs
+    spec:
+      replicas: 3
+      selector:
+        matchLabels:
+          app: platform-docs
+      template:
+        metadata:
+          labels:
+            app: platform-docs
+        spec:
+          containers:
+            - name: web
+              image: registry.internal.example/platform-docs:latest
+  k8s/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: platform-docs
+    spec:
+      selector:
+        app: platform-docs
+      ports:
+        - port: 80
+          targetPort: 80

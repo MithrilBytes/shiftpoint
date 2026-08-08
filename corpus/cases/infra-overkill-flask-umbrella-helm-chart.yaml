@@ -1,0 +1,53 @@
+id: infra-overkill-flask-umbrella-helm-chart
+origin: >-
+  A single Flask service that renders one form. Deployment is an umbrella Helm
+  chart that pulls in the platform team's shared common-service chart and sets
+  values, which is a very common shape in companies with a paved road.
+expect:
+  stage: app-on-free-managed-hosting
+  flags:
+    - helm-without-demand
+files:
+  requirements.txt: |
+    flask==3.0.3
+    gunicorn==22.0.0
+  app.py: |
+    from flask import Flask, request, render_template_string
+
+    app = Flask(__name__)
+
+    @app.get("/")
+    def form():
+        return render_template_string("<form method=post><input name=note></form>")
+
+    @app.post("/")
+    def submit():
+        return {"received": request.form.get("note", "")}
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: notes
+    description: Deployment of the notes service
+    type: application
+    version: 0.4.1
+    appVersion: "2026.7"
+    dependencies:
+      - name: common-service
+        version: 1.14.0
+        repository: https://charts.internal.example.com
+  chart/values.yaml: |
+    common-service:
+      image:
+        repository: registry.internal/notes
+        tag: "2026.7"
+      replicaCount: 2
+      resources:
+        requests:
+          cpu: 100m
+          memory: 128Mi
+      ingress:
+        enabled: true
+        host: notes.internal.example.com
+  README.md: |
+    # notes
+
+    One Flask app. `helm upgrade --install notes ./chart` deploys it.

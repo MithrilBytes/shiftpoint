@@ -1,0 +1,46 @@
+id: static-docs-gatsby-portfolio
+origin: "A photographer's portfolio on Gatsby. Gatsby prerenders everything to HTML at build time, and this one has no functions directory and no SSR pages."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "amara-oyelaran-portfolio",
+      "private": true,
+      "scripts": {
+        "build": "gatsby build",
+        "develop": "gatsby develop"
+      },
+      "dependencies": {
+        "gatsby": "^5.13.7",
+        "gatsby-plugin-image": "^3.13.1",
+        "gatsby-source-filesystem": "^5.13.1",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+      }
+    }
+  gatsby-config.js: |
+    module.exports = {
+      siteMetadata: { title: "Amara Oyelaran" },
+      plugins: ["gatsby-plugin-image", "gatsby-source-filesystem"],
+    };
+  src/pages/index.js: |
+    import * as React from "react";
+
+    export default function Home() {
+      return <main><h1>Amara Oyelaran</h1><p>Documentary photography.</p></main>;
+    }
+  src/pages/about.js: |
+    import * as React from "react";
+
+    export default function About() {
+      return <main><h1>About</h1><p>Based in Lagos and Lisbon.</p></main>;
+    }
+  content/series/harmattan.md: |
+    ---
+    title: Harmattan
+    year: 2025
+    ---
+
+    Twelve frames made over three weeks of dust.

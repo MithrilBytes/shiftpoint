@@ -1,0 +1,43 @@
+id: ruby-go-rails8-solid-queue-sqlite
+origin: "Rails 8 on its own defaults: SQLite on disk, Solid Queue for jobs, Kamal deploying the whole thing to one box. Rails 8 shipped this configuration precisely so a small app does not need Redis, a worker host, and a managed database."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "rails", "~> 8.0.1"
+    gem "sqlite3", ">= 2.1"
+    gem "puma", ">= 6.4"
+    gem "solid_queue"
+    gem "solid_cache"
+  config/database.yml: |
+    production:
+      primary:
+        adapter: sqlite3
+        database: storage/production.sqlite3
+      queue:
+        adapter: sqlite3
+        database: storage/production_queue.sqlite3
+        migrations_paths: db/queue_migrate
+  config/deploy.yml: |
+    service: notes
+    image: example/notes
+    servers:
+      web:
+        - 203.0.113.10
+    volumes:
+      - "notes_storage:/rails/storage"
+  app/jobs/weekly_digest_job.rb: |
+    class WeeklyDigestJob < ApplicationJob
+      queue_as :default
+
+      def perform(user_id)
+        DigestMailer.weekly(User.find(user_id)).deliver_later
+      end
+    end
+  config/routes.rb: |
+    Rails.application.routes.draw do
+      resources :notes
+      root "notes#index"
+    end

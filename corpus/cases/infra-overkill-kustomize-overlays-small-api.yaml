@@ -1,0 +1,74 @@
+id: infra-overkill-kustomize-overlays-small-api
+origin: >-
+  One Fastify endpoint with a full kustomize layout: a base, a staging overlay,
+  and a production overlay that patches the replica count up to twenty. The
+  scale is declared in the overlay, not demanded by anything the application
+  does.
+expect:
+  stage: app-on-free-managed-hosting
+  flags:
+    - kubernetes-without-demand
+files:
+  package.json: |
+    {
+      "name": "featureflags",
+      "version": "0.2.0",
+      "private": true,
+      "scripts": { "start": "node server.js" },
+      "dependencies": { "fastify": "^4.28.1" }
+    }
+  server.js: |
+    const fastify = require("fastify")();
+
+    const FLAGS = { new_nav: true, dark_mode: false };
+
+    fastify.get("/flags/:name", async (request) => ({
+      name: request.params.name,
+      enabled: Boolean(FLAGS[request.params.name]),
+    }));
+
+    fastify.listen({ port: 3000, host: "0.0.0.0" });
+  k8s/base/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: featureflags
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          app: featureflags
+      template:
+        metadata:
+          labels:
+            app: featureflags
+        spec:
+          containers:
+            - name: api
+              image: ghcr.io/example/featureflags:0.2.0
+              ports:
+                - containerPort: 3000
+  k8s/base/kustomization.yaml: |
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    resources:
+      - deployment.yaml
+  k8s/overlays/staging/kustomization.yaml: |
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    namespace: staging
+    resources:
+      - ../../base
+  k8s/overlays/production/kustomization.yaml: |
+    apiVersion: kustomize.config.k8s.io/v1beta1
+    kind: Kustomization
+    namespace: production
+    resources:
+      - ../../base
+    replicas:
+      - name: featureflags
+        count: 20
+  README.md: |
+    # featureflags
+
+    Reads flags from a constant. `kubectl apply -k k8s/overlays/production`.

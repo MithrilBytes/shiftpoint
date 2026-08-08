@@ -1,0 +1,47 @@
+id: node-fastify-api-no-database
+origin: "A Fastify service that signs and validates short lived tokens for other services. Stateless by design, containerised because that is how the platform team takes deployments."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "token-service",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "fastify": "^4.28.1",
+        "@fastify/cors": "^9.0.1",
+        "jsonwebtoken": "^9.0.2"
+      }
+    }
+  src/server.js: |
+    import Fastify from "fastify";
+    import cors from "@fastify/cors";
+    import { routes } from "./routes.js";
+
+    const app = Fastify({ logger: true });
+    await app.register(cors);
+    await app.register(routes);
+    await app.listen({ port: Number(process.env.PORT ?? 3000), host: "0.0.0.0" });
+  src/routes.js: |
+    import jwt from "jsonwebtoken";
+
+    export async function routes(app) {
+      app.post("/tokens", async (request) => {
+        const token = jwt.sign({ sub: request.body.subject }, process.env.SIGNING_KEY, {
+          expiresIn: "15m",
+        });
+        return { token };
+      });
+
+      app.get("/health", async () => ({ ok: true }));
+    }
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/server.js"]

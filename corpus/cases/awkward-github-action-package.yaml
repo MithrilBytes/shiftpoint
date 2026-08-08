@@ -1,0 +1,71 @@
+id: awkward-github-action-package
+origin: "A JavaScript GitHub Action: an action.yml, a bundled entry point, and the Actions toolkit as dependencies. Other repositories reference it in their workflows and it runs on their runners. It is packaged for other people to consume, and there is no server anywhere in the picture."
+expect:
+  stage: library
+  flags: []
+files:
+  action.yml: |
+    name: "Changed migrations"
+    description: "Fails a pull request that changes a migration already merged"
+    inputs:
+      path:
+        description: "Migrations directory"
+        default: "db/migrate"
+    runs:
+      using: "node20"
+      main: "dist/index.js"
+    branding:
+      icon: "database"
+      color: "purple"
+  package.json: |
+    {
+      "name": "changed-migrations-action",
+      "version": "2.1.0",
+      "private": true,
+      "main": "dist/index.js",
+      "scripts": {
+        "build": "ncc build src/index.js -o dist"
+      },
+      "dependencies": {
+        "@actions/core": "^1.10.1",
+        "@actions/github": "^6.0.0"
+      },
+      "devDependencies": {
+        "@vercel/ncc": "^0.38.1"
+      }
+    }
+  src/index.js: |
+    const core = require("@actions/core");
+    const github = require("@actions/github");
+
+    async function run() {
+      const path = core.getInput("path");
+      const files = github.context.payload.pull_request?.changed_files ?? [];
+      const offenders = files.filter((f) => f.startsWith(path) && f.status === "modified");
+      if (offenders.length > 0) {
+        core.setFailed(`Modified merged migrations: ${offenders.join(", ")}`);
+      }
+    }
+
+    run();
+  .github/workflows/test.yml: |
+    name: test
+    on: [push]
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: npm ci && npm run build
+          - run: git diff --exit-code dist/
+  README.md: |
+    # changed-migrations-action
+
+    ```yaml
+    - uses: northgate/changed-migrations-action@v2
+      with:
+        path: db/migrate
+    ```
+
+    Runs on the caller's runner. `dist/` is committed because Actions does not
+    install dependencies.

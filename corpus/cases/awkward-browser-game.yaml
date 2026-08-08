@@ -1,0 +1,74 @@
+id: awkward-browser-game
+origin: "A single player browser game built with Phaser and bundled by Vite. It builds to a folder of files and is played entirely in the tab: no accounts, no scores kept anywhere but localStorage. A game feels like software that needs a server, and this one does not."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "meteor-drift",
+      "private": true,
+      "scripts": {
+        "dev": "vite",
+        "build": "vite build"
+      },
+      "dependencies": {
+        "phaser": "^3.80.1"
+      },
+      "devDependencies": {
+        "vite": "^5.3.4"
+      }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+        <title>Meteor Drift</title>
+      </head>
+      <body>
+        <div id="game"></div>
+        <script type="module" src="/src/main.js"></script>
+      </body>
+    </html>
+  src/main.js: |
+    import Phaser from "phaser";
+    import PlayScene from "./scenes/PlayScene.js";
+
+    new Phaser.Game({
+      type: Phaser.AUTO,
+      parent: "game",
+      width: 960,
+      height: 540,
+      physics: { default: "arcade" },
+      scene: [PlayScene],
+    });
+  src/scenes/PlayScene.js: |
+    import Phaser from "phaser";
+
+    export default class PlayScene extends Phaser.Scene {
+      constructor() {
+        super("play");
+      }
+
+      create() {
+        this.best = Number(localStorage.getItem("best") || 0);
+        this.ship = this.physics.add.image(480, 480, "ship");
+        this.cursors = this.input.keyboard.createCursorKeys();
+      }
+
+      update() {
+        this.ship.setVelocityX(this.cursors.left.isDown ? -300 : this.cursors.right.isDown ? 300 : 0);
+      }
+    }
+  vite.config.js: |
+    export default {
+      base: "./",
+      build: { outDir: "dist" },
+    };
+  README.md: |
+    # meteor-drift
+
+    `npm run build` writes `dist/`. Drag that folder onto any static host.
+    High scores live in localStorage; there is no backend.

@@ -1,0 +1,59 @@
+id: awkward-fork-adds-kubernetes
+origin: "A fork of a small open source Flask tool where the only local change is a deploy/ folder of Kubernetes manifests, because the platform team runs everything on the cluster they already have. The application is unchanged upstream code: one stateless endpoint, no database, no queue."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [kubernetes-without-demand]
+files:
+  README.md: |
+    # paperclip (fork)
+
+    Fork of upstream/paperclip. The only difference from upstream is `deploy/`,
+    which holds the manifests for our cluster. Rebase onto upstream before
+    changing anything under the application.
+  app.py: |
+    from flask import Flask, request, jsonify
+
+    app = Flask(__name__)
+
+    @app.get("/expand")
+    def expand():
+        return jsonify({"url": request.args.get("u", "")})
+  requirements.txt: |
+    flask==3.0.3
+    gunicorn==22.0.0
+  Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /srv
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY . .
+    CMD ["gunicorn", "-b", "0.0.0.0:8000", "app:app"]
+  deploy/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: paperclip
+    spec:
+      replicas: 6
+      selector:
+        matchLabels:
+          app: paperclip
+      template:
+        metadata:
+          labels:
+            app: paperclip
+        spec:
+          containers:
+            - name: paperclip
+              image: registry.internal/paperclip:latest
+  deploy/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: paperclip
+    spec:
+      selector:
+        app: paperclip
+      ports:
+        - port: 80
+          targetPort: 8000

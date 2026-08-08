@@ -1,0 +1,57 @@
+id: python-django-compose-postgres
+origin: "Django app with a docker-compose file checked in so contributors get Postgres locally. Nothing in the app needs a rented server, but the compose file describes one."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags:
+    - composed-stack-that-runs-free
+files:
+  requirements.txt: |
+    Django==5.0.7
+    psycopg[binary]==3.2.1
+    gunicorn==22.0.0
+  manage.py: |
+    import os
+    import sys
+    from django.core.management import execute_from_command_line
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+        execute_from_command_line(sys.argv)
+  config/settings.py: |
+    import os
+
+    INSTALLED_APPS = ["django.contrib.auth", "reading"]
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.postgresql",
+            "NAME": "reading",
+            "HOST": os.environ.get("PGHOST", "db"),
+        }
+    }
+  reading/models.py: |
+    from django.db import models
+
+    class Book(models.Model):
+        title = models.CharField(max_length=200)
+        finished_on = models.DateField(null=True)
+  docker-compose.yml: |
+    services:
+      web:
+        build: .
+        command: gunicorn config.wsgi --bind 0.0.0.0:8000
+        ports:
+          - "8000:8000"
+        depends_on:
+          - db
+      db:
+        image: postgres:16
+        environment:
+          POSTGRES_DB: reading
+          POSTGRES_HOST_AUTH_METHOD: trust
+  Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY . .

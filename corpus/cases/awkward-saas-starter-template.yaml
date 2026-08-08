@@ -1,0 +1,54 @@
+id: awkward-saas-starter-template
+origin: "A SaaS starter template of the kind people fork to begin a project: Next.js, Drizzle on Postgres, and Stripe checkout already wired up, with a pricing page full of placeholder plans. The payment code is scaffolding shipped by the template author, not a business taking money. Nobody has a customer yet."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "next-saas-starter",
+      "private": true,
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "drizzle-orm": "^0.32.0",
+        "postgres": "^3.4.4",
+        "stripe": "^16.2.0"
+      }
+    }
+  drizzle.config.ts: |
+    import type { Config } from "drizzle-kit";
+
+    export default {
+      schema: "./lib/db/schema.ts",
+      out: "./lib/db/migrations",
+      dialect: "postgresql",
+    } satisfies Config;
+  lib/db/schema.ts: |
+    import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+    export const users = pgTable("users", {
+      id: serial("id").primaryKey(),
+      email: text("email").notNull().unique(),
+      createdAt: timestamp("created_at").defaultNow(),
+    });
+  app/pricing/page.tsx: |
+    const PLANS = [
+      { name: "Base", price: "$8", priceId: "price_REPLACE_ME" },
+      { name: "Plus", price: "$12", priceId: "price_REPLACE_ME" },
+    ];
+
+    export default function Pricing() {
+      return <ul>{PLANS.map((p) => <li key={p.name}>{p.name} {p.price}</li>)}</ul>;
+    }
+  .env.example: |
+    POSTGRES_URL=postgresql://user:password@localhost:5432/starter
+    STRIPE_SECRET_KEY=sk_test_replace_me
+    BASE_URL=http://localhost:3000
+  README.md: |
+    # next-saas-starter
+
+    A starter template. Click "Use this template", replace the Stripe test keys
+    and the placeholder plans, and start building. Nothing here is a running
+    product: the pricing page ships with fake price ids on purpose.

@@ -1,0 +1,59 @@
+id: node-astro-static-blog
+origin: "An Astro blog with no adapter configured. Astro's default output is static, so `astro build` writes HTML into dist/ and the site is served as files."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "coastline",
+      "private": true,
+      "type": "module",
+      "scripts": { "build": "astro build", "preview": "astro preview" },
+      "dependencies": {
+        "astro": "^4.15.0",
+        "@astrojs/mdx": "^3.1.5",
+        "@astrojs/sitemap": "^3.1.6"
+      }
+    }
+  astro.config.mjs: |
+    import { defineConfig } from "astro/config";
+    import mdx from "@astrojs/mdx";
+    import sitemap from "@astrojs/sitemap";
+
+    export default defineConfig({
+      site: "https://coastline.example",
+      integrations: [mdx(), sitemap()],
+    });
+  src/pages/index.astro: |
+    ---
+    import { getCollection } from "astro:content";
+    const posts = await getCollection("blog");
+    ---
+    <html lang="en">
+      <body>
+        <h1>Coastline</h1>
+        <ul>
+          {posts.map((post) => <li><a href={`/blog/${post.slug}/`}>{post.data.title}</a></li>)}
+        </ul>
+      </body>
+    </html>
+  src/pages/blog/[...slug].astro: |
+    ---
+    import { getCollection } from "astro:content";
+
+    export async function getStaticPaths() {
+      const posts = await getCollection("blog");
+      return posts.map((post) => ({ params: { slug: post.slug }, props: { post } }));
+    }
+
+    const { post } = Astro.props;
+    const { Content } = await post.render();
+    ---
+    <article><h1>{post.data.title}</h1><Content /></article>
+  src/content/blog/tides.md: |
+    ---
+    title: Reading the tide tables
+    ---
+
+    The tables are printed a year ahead, which tells you something about the sea.

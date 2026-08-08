@@ -1,0 +1,65 @@
+id: node-remix-sqlite
+origin: "A Remix app keeping its data in a SQLite file next to the server, the shape the Remix Indie Stack ships with."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "reading-list",
+      "private": true,
+      "type": "module",
+      "scripts": { "start": "remix-serve ./build/server/index.js" },
+      "dependencies": {
+        "@remix-run/node": "^2.11.2",
+        "@remix-run/react": "^2.11.2",
+        "@remix-run/serve": "^2.11.2",
+        "@prisma/client": "^5.19.0",
+        "isbot": "^4.4.0",
+        "react": "18.3.1",
+        "react-dom": "18.3.1"
+      },
+      "devDependencies": { "prisma": "^5.19.0" }
+    }
+  prisma/schema.prisma: |
+    datasource db {
+      provider = "sqlite"
+      url      = "file:./data/reading.db"
+    }
+
+    generator client {
+      provider = "prisma-client-js"
+    }
+
+    model Book {
+      id     Int     @id @default(autoincrement())
+      title  String
+      isRead Boolean @default(false)
+    }
+  app/root.tsx: |
+    import { Links, Outlet, Scripts } from "@remix-run/react";
+
+    export default function App() {
+      return (
+        <html lang="en">
+          <head><Links /></head>
+          <body><Outlet /><Scripts /></body>
+        </html>
+      );
+    }
+  app/routes/_index.tsx: |
+    import { useLoaderData } from "@remix-run/react";
+    import { db } from "../db.server";
+
+    export async function loader() {
+      return { books: await db.book.findMany() };
+    }
+
+    export default function Index() {
+      const { books } = useLoaderData<typeof loader>();
+      return <ul>{books.map((b) => <li key={b.id}>{b.title}</li>)}</ul>;
+    }
+  app/db.server.ts: |
+    import { PrismaClient } from "@prisma/client";
+
+    export const db = new PrismaClient();

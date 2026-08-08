@@ -1,0 +1,46 @@
+id: static-docs-formatter-only-package-json
+origin: "A hand written static site that grew a package.json for Prettier alone. Extremely common: the author wanted consistent formatting, not a build step, and nothing in the manifest runs at request time."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "westlake-choir",
+      "private": true,
+      "scripts": {
+        "format": "prettier --write ."
+      },
+      "devDependencies": {
+        "prettier": "^3.3.2"
+      }
+    }
+  .prettierrc: |
+    {
+      "printWidth": 100
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Westlake Community Choir</title>
+        <link rel="stylesheet" href="css/style.css" />
+      </head>
+      <body>
+        <h1>Westlake Community Choir</h1>
+        <p>We rehearse Tuesdays at 7pm in the parish hall. New singers welcome.</p>
+        <a href="concerts.html">Upcoming concerts</a>
+      </body>
+    </html>
+  concerts.html: |
+    <!doctype html>
+    <html lang="en">
+      <head><meta charset="utf-8" /><title>Concerts</title></head>
+      <body>
+        <h1>Upcoming concerts</h1>
+        <p>Spring programme, 14 April, St Anne's.</p>
+      </body>
+    </html>
+  css/style.css: |
+    body { font-family: system-ui, sans-serif; line-height: 1.6; }

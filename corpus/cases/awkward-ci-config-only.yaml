@@ -1,0 +1,59 @@
+id: awkward-ci-config-only
+origin: "An organisation's shared CI repository: reusable GitHub Actions workflows other repositories call, plus dependabot defaults and a CODEOWNERS file. It holds no application and nothing is deployed from it; the workflows execute on GitHub's runners when other repositories reference them."
+expect:
+  stage: unknown
+  flags: []
+files:
+  .github/workflows/reusable-node-ci.yml: |
+    name: reusable-node-ci
+    on:
+      workflow_call:
+        inputs:
+          node-version:
+            type: string
+            default: "20"
+    jobs:
+      test:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - uses: actions/setup-node@v4
+            with:
+              node-version: ${{ inputs.node-version }}
+          - run: npm ci
+          - run: npm test
+  .github/workflows/reusable-publish-image.yml: |
+    name: reusable-publish-image
+    on:
+      workflow_call:
+        secrets:
+          registry-token:
+            required: true
+    jobs:
+      publish:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: docker build -t ghcr.io/${{ github.repository }}:${{ github.sha }} .
+          - run: docker push ghcr.io/${{ github.repository }}:${{ github.sha }}
+  .github/dependabot.yml: |
+    version: 2
+    updates:
+      - package-ecosystem: github-actions
+        directory: "/"
+        schedule:
+          interval: weekly
+  CODEOWNERS: |
+    *  @northgate/platform
+  README.md: |
+    # ci-workflows
+
+    Shared workflows. Call one from another repository:
+
+    ```yaml
+    jobs:
+      test:
+        uses: northgate/ci-workflows/.github/workflows/reusable-node-ci.yml@v3
+    ```
+
+    Nothing is deployed from this repository.

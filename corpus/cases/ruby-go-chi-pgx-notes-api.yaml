@@ -1,0 +1,52 @@
+id: ruby-go-chi-pgx-notes-api
+origin: "A stateless Go JSON API on chi talking to Postgres through pgx. The default shape of a small Go web service."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/notes
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/jackc/pgx/v5 v5.6.0
+    )
+  main.go: |
+    package main
+
+    import (
+    	"context"
+    	"net/http"
+    	"os"
+
+    	"github.com/go-chi/chi/v5"
+    	"github.com/jackc/pgx/v5/pgxpool"
+    )
+
+    func main() {
+    	pool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+    	if err != nil {
+    		panic(err)
+    	}
+    	r := chi.NewRouter()
+    	r.Get("/notes", listNotes(pool))
+    	http.ListenAndServe(":8080", r)
+    }
+  internal/handler/notes.go: |
+    package handler
+
+    import "net/http"
+
+    func Health(w http.ResponseWriter, r *http.Request) {
+    	w.WriteHeader(http.StatusOK)
+    }
+  migrations/001_create_notes.sql: |
+    create table notes (
+      id bigserial primary key,
+      body text not null,
+      created_at timestamptz not null default now()
+    );
+  .env.example: |
+    DATABASE_URL=postgres://localhost:5432/notes

@@ -1,0 +1,42 @@
+id: node-nextjs-pages-router-marketing
+origin: "A Next.js pages router site for a small studio: a few rendered pages and one API route that forwards a contact form. No database anywhere."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "studio-site",
+      "private": true,
+      "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "nodemailer": "^6.9.14"
+      }
+    }
+  next.config.js: |
+    /** @type {import('next').NextConfig} */
+    module.exports = { reactStrictMode: true };
+  pages/index.tsx: |
+    export default function Home() {
+      return <main><h1>We build small things carefully.</h1></main>;
+    }
+  pages/about.tsx: |
+    export default function About() {
+      return <main><h1>Three people and a long attention span.</h1></main>;
+    }
+  pages/api/contact.ts: |
+    import type { NextApiRequest, NextApiResponse } from "next";
+    import nodemailer from "nodemailer";
+
+    export default async function handler(req: NextApiRequest, res: NextApiResponse) {
+      const transport = nodemailer.createTransport({ url: process.env.SMTP_URL });
+      await transport.sendMail({
+        to: "hello@example.com",
+        subject: "Contact form",
+        text: String(req.body.message ?? ""),
+      });
+      res.status(204).end();
+    }

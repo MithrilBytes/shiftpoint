@@ -1,0 +1,100 @@
+id: infra-overkill-nextjs-scaffolded-helm-chart
+origin: >-
+  A Next.js marketing and docs app with a chart produced by `helm create` and
+  then trimmed. One deployment, one service, one application. Nothing here runs
+  outside a request.
+expect:
+  stage: app-on-free-managed-hosting
+  flags:
+    - kubernetes-without-demand
+    - helm-without-demand
+files:
+  package.json: |
+    {
+      "name": "atlas-web",
+      "version": "0.5.0",
+      "private": true,
+      "scripts": {
+        "dev": "next dev",
+        "build": "next build",
+        "start": "next start"
+      },
+      "dependencies": {
+        "next": "14.2.4",
+        "react": "18.3.1",
+        "react-dom": "18.3.1"
+      }
+    }
+  next.config.js: |
+    module.exports = {
+      output: "standalone",
+    };
+  app/page.tsx: |
+    export default function Home() {
+      return (
+        <main>
+          <h1>Atlas</h1>
+          <p>Maps for people who walk.</p>
+        </main>
+      );
+    }
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: atlas-web
+    description: A Helm chart for Kubernetes
+    type: application
+    version: 0.1.0
+    appVersion: "0.5.0"
+  chart/values.yaml: |
+    replicaCount: 2
+
+    image:
+      repository: ghcr.io/example/atlas-web
+      pullPolicy: IfNotPresent
+      tag: "0.5.0"
+
+    service:
+      type: ClusterIP
+      port: 3000
+
+    autoscaling:
+      enabled: true
+      minReplicas: 2
+      maxReplicas: 20
+  chart/templates/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: atlas-web
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: atlas-web
+      template:
+        metadata:
+          labels:
+            app: atlas-web
+        spec:
+          containers:
+            - name: atlas-web
+              image: ghcr.io/example/atlas-web:0.5.0
+              ports:
+                - containerPort: 3000
+  chart/templates/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: atlas-web
+    spec:
+      type: ClusterIP
+      selector:
+        app: atlas-web
+      ports:
+        - port: 3000
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY . .
+    RUN npm ci && npm run build
+    CMD ["npm", "start"]

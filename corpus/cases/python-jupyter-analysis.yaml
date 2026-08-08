@@ -1,0 +1,38 @@
+id: python-jupyter-analysis
+origin: "A notebook and a data file, written to answer one question about churn and never meant to be deployed."
+expect:
+  stage: notebook
+  flags: []
+files:
+  requirements.txt: |
+    pandas==2.2.2
+    matplotlib==3.9.1
+    jupyterlab==4.2.3
+  notebooks/churn.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": [
+        "import pandas as pd\n",
+        "df = pd.read_csv('../data/subscriptions.csv')\n",
+        "df.groupby('plan')['cancelled'].mean().plot.bar()"
+       ]
+      }
+     ],
+     "metadata": {"kernelspec": {"name": "python3", "display_name": "Python 3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  data/subscriptions.csv: |
+    plan,cancelled
+    basic,1
+    basic,0
+    pro,0
+  README.md: |
+    # churn
+
+    Scratch analysis of last quarter's cancellations. Open the notebook, run all.

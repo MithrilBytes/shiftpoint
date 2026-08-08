@@ -1,0 +1,81 @@
+id: ruby-go-asynq-worker-queue
+origin: "A Go API that enqueues work onto Asynq, the Redis backed task queue Go teams reach for, with a separate worker binary consuming it. Two processes, one of which is not serving requests."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/mailer
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/hibiken/asynq v0.24.1
+    	github.com/jackc/pgx/v5 v5.6.0
+    	github.com/redis/go-redis/v9 v9.5.3
+    )
+  cmd/api/main.go: |
+    package main
+
+    import (
+    	"net/http"
+    	"os"
+
+    	"github.com/go-chi/chi/v5"
+    	"github.com/hibiken/asynq"
+    )
+
+    func main() {
+    	client := asynq.NewClient(asynq.RedisClientOpt{Addr: os.Getenv("REDIS_ADDR")})
+    	r := chi.NewRouter()
+    	r.Post("/campaigns", enqueueCampaign(client))
+    	http.ListenAndServe(":8080", r)
+    }
+  cmd/worker/main.go: |
+    package main
+
+    import (
+    	"os"
+
+    	"github.com/example/mailer/internal/tasks"
+    	"github.com/hibiken/asynq"
+    )
+
+    func main() {
+    	srv := asynq.NewServer(
+    		asynq.RedisClientOpt{Addr: os.Getenv("REDIS_ADDR")},
+    		asynq.Config{Concurrency: 10},
+    	)
+    	mux := asynq.NewServeMux()
+    	mux.HandleFunc(tasks.TypeSendEmail, tasks.HandleSendEmail)
+    	if err := srv.Run(mux); err != nil {
+    		panic(err)
+    	}
+    }
+  internal/tasks/email.go: |
+    package tasks
+
+    import (
+    	"context"
+
+    	"github.com/hibiken/asynq"
+    )
+
+    const TypeSendEmail = "email:send"
+
+    func HandleSendEmail(ctx context.Context, t *asynq.Task) error {
+    	return deliver(ctx, t.Payload())
+    }
+  docker-compose.yml: |
+    services:
+      api:
+        build: .
+        command: /api
+      worker:
+        build: .
+        command: /worker
+      db:
+        image: postgres:16
+      redis:
+        image: redis:7-alpine

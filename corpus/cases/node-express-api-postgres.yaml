@@ -1,0 +1,50 @@
+id: node-express-api-postgres
+origin: "A plain Express JSON API over Postgres with node-postgres, the shape most Node backends still have."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "invoices-api",
+      "private": true,
+      "type": "commonjs",
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "pg": "^8.12.0",
+        "cors": "^2.8.5",
+        "dotenv": "^16.4.5"
+      },
+      "devDependencies": { "vitest": "^2.0.5" }
+    }
+  src/server.js: |
+    require("dotenv").config();
+    const express = require("express");
+    const cors = require("cors");
+    const customers = require("./routes/customers");
+
+    const app = express();
+    app.use(cors());
+    app.use(express.json());
+    app.use("/customers", customers);
+    app.listen(process.env.PORT || 3000);
+  src/routes/customers.js: |
+    const { Router } = require("express");
+    const { pool } = require("../db");
+
+    const router = Router();
+
+    router.get("/", async (_req, res) => {
+      const { rows } = await pool.query("select id, name from customers order by name");
+      res.json(rows);
+    });
+
+    module.exports = router;
+  src/db.js: |
+    const { Pool } = require("pg");
+
+    exports.pool = new Pool({ connectionString: process.env.DATABASE_URL });
+  .env.example: |
+    DATABASE_URL=postgres://localhost:5432/invoices
+    PORT=3000

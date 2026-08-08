@@ -1,0 +1,40 @@
+id: static-docs-markdown-only-handbook
+origin: "A company handbook kept as plain markdown in git and read on the code host. No generator, no manifest, no HTML: the repository is documentation and nothing else. GitLab's public handbook started life this shape and thousands of internal ones still are."
+expect:
+  stage: static-site
+  flags: []
+files:
+  README.md: |
+    # Meridian Handbook
+
+    How we work. Everything here is editable by anyone, by pull request.
+
+    - [Onboarding](docs/onboarding.md)
+    - [Security](docs/security.md)
+    - [Expenses](docs/expenses.md)
+  CONTRIBUTING.md: |
+    # Contributing
+
+    Open a pull request. One reviewer, no committee. If a page is wrong, fix it
+    rather than filing an issue about it.
+  docs/onboarding.md: |
+    # Onboarding
+
+    Week one: laptop, accounts, a buddy, and lunch with the team you joined.
+    Week two: ship something small end to end.
+  docs/security.md: |
+    # Security
+
+    Hardware keys for everything that supports them. Password manager for what
+    does not. Report anything odd to security@ and never to a group chat.
+  docs/expenses.md: |
+    # Expenses
+
+    Spend it as if it were yours. Receipts within thirty days.
+  docs/decisions/0004-choose-postgres.md: |
+    # 0004: Choose Postgres
+
+    Status: accepted
+
+    We picked Postgres over MySQL because our reporting depends on window
+    functions and JSON indexing.

@@ -1,0 +1,80 @@
+id: awkward-laravel-mysql
+origin: "A Laravel application on MySQL, which is the most common shape of small web application on the planet and one of the few this tool has no reader for. Composer declares the framework, artisan is at the root, and the env sample names a MySQL connection."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  composer.json: |
+    {
+      "name": "brightside/invoices",
+      "type": "project",
+      "require": {
+        "php": "^8.2",
+        "laravel/framework": "^11.9",
+        "guzzlehttp/guzzle": "^7.8"
+      },
+      "require-dev": {
+        "phpunit/phpunit": "^11.0"
+      }
+    }
+  artisan: |
+    #!/usr/bin/env php
+    <?php
+
+    require __DIR__.'/vendor/autoload.php';
+
+    $app = require_once __DIR__.'/bootstrap/app.php';
+    $app->handleCommand(new Symfony\Component\Console\Input\ArgvInput);
+  .env.example: |
+    APP_NAME=Brightside
+    APP_ENV=production
+    DB_CONNECTION=mysql
+    DB_HOST=127.0.0.1
+    DB_PORT=3306
+    DB_DATABASE=brightside
+    SESSION_DRIVER=database
+  routes/web.php: |
+    <?php
+
+    use Illuminate\Support\Facades\Route;
+    use App\Http\Controllers\InvoiceController;
+
+    Route::get('/', [InvoiceController::class, 'index']);
+    Route::get('/invoices/{invoice}', [InvoiceController::class, 'show']);
+  app/Http/Controllers/InvoiceController.php: |
+    <?php
+
+    namespace App\Http\Controllers;
+
+    use App\Models\Invoice;
+
+    class InvoiceController extends Controller
+    {
+        public function index()
+        {
+            return view('invoices.index', ['invoices' => Invoice::latest()->paginate(25)]);
+        }
+    }
+  database/migrations/2024_05_02_000000_create_invoices_table.php: |
+    <?php
+
+    use Illuminate\Database\Migrations\Migration;
+    use Illuminate\Database\Schema\Blueprint;
+    use Illuminate\Support\Facades\Schema;
+
+    return new class extends Migration
+    {
+        public function up(): void
+        {
+            Schema::create('invoices', function (Blueprint $table) {
+                $table->id();
+                $table->string('reference')->unique();
+                $table->timestamps();
+            });
+        }
+    };
+  README.md: |
+    # brightside invoices
+
+    Laravel 11 on MySQL 8. `php artisan serve` for local work, deployed with
+    nginx and php-fpm.

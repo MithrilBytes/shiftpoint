@@ -1,0 +1,42 @@
+id: static-docs-hugo-themed-site
+origin: "A Hugo site using an off the shelf theme, so the repository holds configuration and content and no layouts of its own. Hugo ships a single Go binary that nobody vendors, so there is no dependency manifest either. This is the standard `hugo new site` plus a theme."
+expect:
+  stage: static-site
+  flags: []
+files:
+  hugo.toml: |
+    baseURL = "https://ninebarrow.example/"
+    languageCode = "en-gb"
+    title = "Ninebarrow Trail Notes"
+    theme = "ananke"
+
+    [params]
+      description = "Long distance walking in southern England."
+  archetypes/default.md: |
+    ---
+    title: "{{ replace .Name "-" " " | title }}"
+    date: {{ .Date }}
+    draft: true
+    ---
+  content/_index.md: |
+    ---
+    title: Ninebarrow Trail Notes
+    ---
+
+    Route notes, water sources, and where the stiles are broken.
+  content/posts/purbeck-ridge.md: |
+    ---
+    title: The Purbeck ridge in February
+    date: 2026-02-11
+    ---
+
+    Twelve miles of chalk, and one gate that has not opened since 2019.
+  content/about.md: |
+    ---
+    title: About
+    ---
+
+    Written by someone who walks slowly and takes notes.
+  static/robots.txt: |
+    User-agent: *
+    Allow: /

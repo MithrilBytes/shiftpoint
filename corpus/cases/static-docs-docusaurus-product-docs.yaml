@@ -1,0 +1,50 @@
+id: static-docs-docusaurus-product-docs
+origin: "A product documentation site on Docusaurus. React at build time, plain files at serve time, which is how nearly every open source project ships its docs."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "ledgerkit-docs",
+      "private": true,
+      "scripts": {
+        "start": "docusaurus start",
+        "build": "docusaurus build"
+      },
+      "dependencies": {
+        "@docusaurus/core": "^3.5.2",
+        "@docusaurus/preset-classic": "^3.5.2",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+      }
+    }
+  docusaurus.config.js: |
+    export default {
+      title: "LedgerKit",
+      url: "https://docs.ledgerkit.example",
+      baseUrl: "/",
+      presets: [["classic", { docs: { sidebarPath: "./sidebars.js" } }]],
+    };
+  sidebars.js: |
+    export default {
+      docs: ["intro", "install", "reconciliation"],
+    };
+  docs/intro.md: |
+    ---
+    sidebar_position: 1
+    ---
+
+    # Introduction
+
+    LedgerKit reconciles bank exports against your books.
+  docs/install.md: |
+    # Install
+
+    ```
+    npm install ledgerkit
+    ```
+  docs/reconciliation.md: |
+    # Reconciliation
+
+    Matching runs in three passes: exact, fuzzy, then manual review.

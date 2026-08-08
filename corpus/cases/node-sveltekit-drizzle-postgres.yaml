@@ -1,0 +1,65 @@
+id: node-sveltekit-drizzle-postgres
+origin: "A SvelteKit app with server load functions reading Postgres through Drizzle, deployed with adapter-auto."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "changelog",
+      "private": true,
+      "type": "module",
+      "scripts": { "build": "vite build", "preview": "vite preview" },
+      "dependencies": {
+        "drizzle-orm": "^0.33.0",
+        "postgres": "^3.4.4"
+      },
+      "devDependencies": {
+        "@sveltejs/kit": "^2.5.24",
+        "@sveltejs/adapter-auto": "^3.2.4",
+        "svelte": "^4.2.19",
+        "vite": "^5.4.2",
+        "drizzle-kit": "^0.24.0"
+      }
+    }
+  drizzle.config.ts: |
+    import type { Config } from "drizzle-kit";
+
+    export default {
+      schema: "./src/lib/schema.ts",
+      out: "./drizzle",
+      dialect: "postgresql",
+      dbCredentials: { url: process.env.DATABASE_URL! },
+    } satisfies Config;
+  src/lib/schema.ts: |
+    import { pgTable, serial, text, timestamp } from "drizzle-orm/pg-core";
+
+    export const entries = pgTable("entries", {
+      id: serial("id").primaryKey(),
+      title: text("title").notNull(),
+      publishedAt: timestamp("published_at").defaultNow(),
+    });
+  src/lib/db.ts: |
+    import { drizzle } from "drizzle-orm/postgres-js";
+    import postgres from "postgres";
+
+    export const db = drizzle(postgres(process.env.DATABASE_URL!));
+  src/routes/+page.server.ts: |
+    import { db } from "$lib/db";
+    import { entries } from "$lib/schema";
+
+    export async function load() {
+      return { entries: await db.select().from(entries).limit(50) };
+    }
+  src/routes/+page.svelte: |
+    <script lang="ts">
+      export let data;
+    </script>
+
+    <ul>
+      {#each data.entries as entry}
+        <li>{entry.title}</li>
+      {/each}
+    </ul>
+  .env.example: |
+    DATABASE_URL=postgres://localhost:5432/changelog

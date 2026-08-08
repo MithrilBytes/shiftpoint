@@ -1,0 +1,45 @@
+id: node-nuxt-ssr-site
+origin: "A Nuxt 3 site rendered on the server, with one Nitro API route handling the newsletter signup. No database: signups are posted to a mailing list provider."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "field-notes",
+      "private": true,
+      "type": "module",
+      "scripts": { "build": "nuxt build", "preview": "nuxt preview" },
+      "dependencies": {
+        "nuxt": "^3.13.0",
+        "vue": "^3.4.38",
+        "vue-router": "^4.4.3"
+      }
+    }
+  nuxt.config.ts: |
+    export default defineNuxtConfig({
+      ssr: true,
+      compatibilityDate: "2024-08-01",
+    });
+  app.vue: |
+    <template>
+      <NuxtLayout>
+        <NuxtPage />
+      </NuxtLayout>
+    </template>
+  pages/index.vue: |
+    <template>
+      <main>
+        <h1>Field notes</h1>
+        <p>Short pieces about surveying work.</p>
+      </main>
+    </template>
+  server/api/subscribe.post.ts: |
+    export default defineEventHandler(async (event) => {
+      const body = await readBody(event);
+      await $fetch("https://lists.example.com/subscribe", {
+        method: "POST",
+        body: { email: body.email },
+      });
+      return { ok: true };
+    });

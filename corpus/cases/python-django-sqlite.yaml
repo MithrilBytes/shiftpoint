@@ -1,0 +1,36 @@
+id: python-django-sqlite
+origin: "Small internal Django tool left on the default SQLite backend and deployed to one box, which happens more often than anyone admits."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  requirements.txt: |
+    Django==5.0.7
+    gunicorn==22.0.0
+  manage.py: |
+    import os
+    import sys
+    from django.core.management import execute_from_command_line
+
+    if __name__ == "__main__":
+        os.environ.setdefault("DJANGO_SETTINGS_MODULE", "config.settings")
+        execute_from_command_line(sys.argv)
+  config/settings.py: |
+    from pathlib import Path
+
+    BASE_DIR = Path(__file__).resolve().parent.parent
+    INSTALLED_APPS = ["django.contrib.admin", "django.contrib.auth", "requests_app"]
+
+    DATABASES = {
+        "default": {
+            "ENGINE": "django.db.backends.sqlite3",
+            "NAME": BASE_DIR / "db.sqlite3",
+        }
+    }
+  requests_app/models.py: |
+    from django.db import models
+
+    class LeaveRequest(models.Model):
+        employee = models.CharField(max_length=80)
+        starts_on = models.DateField()
+        approved = models.BooleanField(default=False)

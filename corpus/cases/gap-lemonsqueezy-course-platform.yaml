@@ -1,0 +1,69 @@
+id: gap-lemonsqueezy-course-platform
+origin: "A one person course business: Next.js, Postgres for enrolments, and Lemon Squeezy handling checkout and VAT. Real customers, real money, and a pricing page that is selling something rather than describing a plan."
+expect:
+  stage: commercial-app-on-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "slow-carpentry",
+      "private": true,
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "@lemonsqueezy/lemonsqueezy.js": "^3.2.0",
+        "pg": "^8.12.0"
+      }
+    }
+  app/pricing/page.tsx: |
+    const COURSES = [
+      { slug: "hand-cut-joints", title: "Hand cut joints", price: "GBP 89", variant: 412907 },
+      { slug: "sharpening", title: "Sharpening from scratch", price: "GBP 39", variant: 412911 },
+    ];
+
+    export default function Pricing() {
+      return (
+        <ul>
+          {COURSES.map((course) => (
+            <li key={course.slug}>
+              <a href={`/checkout/${course.variant}`}>{course.title} {course.price}</a>
+            </li>
+          ))}
+        </ul>
+      );
+    }
+  app/api/checkout/[variant]/route.ts: |
+    import { createCheckout, lemonSqueezySetup } from "@lemonsqueezy/lemonsqueezy.js";
+
+    lemonSqueezySetup({ apiKey: process.env.LEMONSQUEEZY_API_KEY! });
+
+    export async function POST(_request: Request, { params }: { params: { variant: string } }) {
+      const checkout = await createCheckout(process.env.LEMONSQUEEZY_STORE_ID!, params.variant);
+      return Response.redirect(checkout.data!.data.attributes.url, 303);
+    }
+  app/api/webhooks/route.ts: |
+    import { enrol } from "@/lib/enrolments";
+
+    export async function POST(request: Request) {
+      const event = await request.json();
+      if (event.meta.event_name === "order_created") {
+        await enrol(event.data.attributes.user_email, event.data.attributes.first_order_item.variant_id);
+      }
+      return new Response(null, { status: 204 });
+    }
+  lib/enrolments.ts: |
+    import pg from "pg";
+
+    const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+
+    export async function enrol(email: string, variantId: number) {
+      await pool.query(
+        "insert into enrolments (email, variant_id) values ($1, $2) on conflict do nothing",
+        [email, variantId],
+      );
+    }
+  .env.example: |
+    DATABASE_URL=postgres://courses:courses@localhost:5432/courses
+    LEMONSQUEEZY_API_KEY=
+    LEMONSQUEEZY_STORE_ID=

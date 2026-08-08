@@ -1,0 +1,47 @@
+id: static-docs-nextjs-static-export
+origin: "A Next.js site configured for static export (`output: \"export\"`), which is how a lot of teams build a brochure site with the framework they already know. `next build` writes an out/ directory of HTML and there is no Node process at runtime."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "thornbury-clinic-site",
+      "private": true,
+      "scripts": {
+        "build": "next build"
+      },
+      "dependencies": {
+        "next": "^14.2.5",
+        "react": "^18.3.1",
+        "react-dom": "^18.3.1"
+      }
+    }
+  next.config.mjs: |
+    /** @type {import('next').NextConfig} */
+    export default {
+      output: "export",
+      images: { unoptimized: true },
+      trailingSlash: true,
+    };
+  app/layout.tsx: |
+    export default function RootLayout({ children }: { children: React.ReactNode }) {
+      return (
+        <html lang="en">
+          <body>{children}</body>
+        </html>
+      );
+    }
+  app/page.tsx: |
+    export default function Home() {
+      return (
+        <main>
+          <h1>Thornbury Physiotherapy</h1>
+          <p>Appointments Monday to Friday. Call 0117 496 0142.</p>
+        </main>
+      );
+    }
+  app/team/page.tsx: |
+    export default function Team() {
+      return <main><h1>Our team</h1><p>Four physiotherapists and a sports rehabilitator.</p></main>;
+    }

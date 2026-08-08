@@ -1,0 +1,53 @@
+id: node-cli-with-bin
+origin: "A command line tool that checks a repository's licence headers. Installed with npx and run in a terminal or a CI step."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "headercheck",
+      "version": "0.6.2",
+      "description": "Check that source files carry a licence header.",
+      "license": "MIT",
+      "type": "module",
+      "bin": { "headercheck": "./bin/headercheck.js" },
+      "files": ["bin", "src"],
+      "engines": { "node": ">=18" },
+      "dependencies": { "commander": "^12.1.0", "picocolors": "^1.0.1" }
+    }
+  bin/headercheck.js: |
+    #!/usr/bin/env node
+    import { Command } from "commander";
+    import { check } from "../src/check.js";
+
+    const program = new Command();
+    program
+      .argument("[dir]", "directory to check", ".")
+      .option("--fix", "write missing headers")
+      .action(async (dir, options) => {
+        const missing = await check(dir, options);
+        process.exit(missing.length === 0 ? 0 : 1);
+      });
+
+    program.parse();
+  src/check.js: |
+    import { readFile, readdir } from "node:fs/promises";
+    import { join } from "node:path";
+    import pc from "picocolors";
+
+    export async function check(dir) {
+      const missing = [];
+
+      for (const entry of await readdir(dir, { withFileTypes: true })) {
+        if (!entry.isFile() || !entry.name.endsWith(".js")) continue;
+        const path = join(dir, entry.name);
+        const text = await readFile(path, "utf8");
+        if (!text.startsWith("// SPDX-License-Identifier:")) {
+          missing.push(path);
+          console.log(pc.yellow(`missing header: ${path}`));
+        }
+      }
+
+      return missing;
+    }

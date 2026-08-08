@@ -1,0 +1,47 @@
+id: ruby-go-rails-sidekiq-compose
+origin: "Rails with a Sidekiq worker, Postgres, and Redis, wired up in compose for local parity. The standard Rails production stack."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+    gem "rails", "~> 7.1.3"
+    gem "pg", "~> 1.5"
+    gem "sidekiq", "~> 7.2"
+    gem "redis", "~> 5.1"
+    gem "puma", ">= 6.4"
+  app/jobs/invoice_email_job.rb: |
+    class InvoiceEmailJob
+      include Sidekiq::Job
+
+      def perform(invoice_id)
+        InvoiceMailer.receipt(Invoice.find(invoice_id)).deliver_now
+      end
+    end
+  config/sidekiq.yml: |
+    :concurrency: 5
+    :queues:
+      - default
+      - mailers
+  docker-compose.yml: |
+    services:
+      web:
+        build: .
+        command: bundle exec puma -C config/puma.rb
+        ports:
+          - "3000:3000"
+      worker:
+        build: .
+        command: bundle exec sidekiq
+      db:
+        image: postgres:16
+      redis:
+        image: redis:7-alpine
+  Dockerfile: |
+    FROM ruby:3.3-slim
+    WORKDIR /app
+    COPY Gemfile ./
+    RUN bundle install
+    COPY . .
+    CMD ["bundle", "exec", "puma", "-C", "config/puma.rb"]

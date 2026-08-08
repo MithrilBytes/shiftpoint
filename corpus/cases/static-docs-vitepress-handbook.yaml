@@ -1,0 +1,42 @@
+id: static-docs-vitepress-handbook
+origin: "An internal engineering handbook on VitePress. Markdown in docs/, a config under .vitepress/, built to static files and dropped on an internal static host."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "engineering-handbook",
+      "private": true,
+      "scripts": {
+        "docs:dev": "vitepress dev docs",
+        "docs:build": "vitepress build docs"
+      },
+      "devDependencies": {
+        "vitepress": "^1.3.4"
+      }
+    }
+  docs/.vitepress/config.mts: |
+    import { defineConfig } from "vitepress";
+
+    export default defineConfig({
+      title: "Engineering Handbook",
+      themeConfig: {
+        sidebar: [{ text: "Start here", link: "/onboarding" }],
+      },
+    });
+  docs/index.md: |
+    ---
+    layout: home
+    hero:
+      name: Engineering Handbook
+      tagline: How we work, written down.
+    ---
+  docs/onboarding.md: |
+    # Onboarding
+
+    Day one is laptop, accounts, and a walk through the deploy pipeline.
+  docs/oncall.md: |
+    # On call
+
+    One primary, one secondary, handover on Wednesday morning.

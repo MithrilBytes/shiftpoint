@@ -1,0 +1,64 @@
+id: node-vite-react-spa
+origin: "A Vite single page app for an internal dashboard. It builds to a folder of JS and HTML and talks to an API that lives somewhere else, so nothing in this repository runs on a server."
+expect:
+  stage: static-site
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "fleet-dashboard",
+      "private": true,
+      "type": "module",
+      "scripts": { "dev": "vite", "build": "vite build", "preview": "vite preview" },
+      "dependencies": {
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "react-router-dom": "^6.26.1"
+      },
+      "devDependencies": {
+        "vite": "^5.4.2",
+        "@vitejs/plugin-react": "^4.3.1",
+        "typescript": "^5.5.4"
+      }
+    }
+  index.html: |
+    <!doctype html>
+    <html lang="en">
+      <head>
+        <meta charset="utf-8" />
+        <title>Fleet</title>
+      </head>
+      <body>
+        <div id="root"></div>
+        <script type="module" src="/src/main.tsx"></script>
+      </body>
+    </html>
+  vite.config.ts: |
+    import { defineConfig } from "vite";
+    import react from "@vitejs/plugin-react";
+
+    export default defineConfig({
+      plugins: [react()],
+      build: { outDir: "dist" },
+    });
+  src/main.tsx: |
+    import { createRoot } from "react-dom/client";
+    import { App } from "./App";
+
+    createRoot(document.getElementById("root")!).render(<App />);
+  src/App.tsx: |
+    import { useEffect, useState } from "react";
+
+    export function App() {
+      const [vehicles, setVehicles] = useState<Array<{ id: string; plate: string }>>([]);
+
+      useEffect(() => {
+        fetch(`${import.meta.env.VITE_API_URL}/vehicles`)
+          .then((response) => response.json())
+          .then(setVehicles);
+      }, []);
+
+      return <ul>{vehicles.map((v) => <li key={v.id}>{v.plate}</li>)}</ul>;
+    }
+  .env.example: |
+    VITE_API_URL=https://api.example.com
