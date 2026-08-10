@@ -5,7 +5,7 @@ import { detectJobs } from "./jobs.js";
 import { declaredDependencies, manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
 
 const NOTEBOOK = /\.ipynb$/;
-const INDEX_HTML = /(^|\/)index\.html$/;
+const MARKDOWN = /\.mdx?$/;
 // Only languages a managed or free function tier will actually run. A
 // repository of shell scripts and Swift files is tooling, and telling its
 // owner about Lambda pricing would be noise.
@@ -22,7 +22,8 @@ const SCRIPT_SOURCE = /\.(py|js|mjs|cjs|ts|rb|go)$/;
  * host here" instead.
  */
 export function detectShape(repo: Repo): Signal[] {
-  const frameworks = detectFramework(repo).find((signal) => signal.kind === "framework")?.values ?? [];
+  const detected = detectFramework(repo).find((signal) => signal.kind === "framework");
+  const frameworks = detected?.values ?? [];
   const isStatic = frameworks.includes("static");
   const isService = frameworks.some((value) => value !== "static" && value !== "unknown");
 
@@ -46,8 +47,13 @@ export function detectShape(repo: Repo): Signal[] {
     return [signal("notebook", "high", `${notebooks.length} notebook(s), including ${notebooks[0]}`)];
   }
 
+  // The framework detector already said why this builds to files, whether that
+  // was a generator in the manifest, a build configured to export, a
+  // generator's own configuration file, or HTML checked in. Repeating its
+  // reasoning here got it wrong: it named an index.html that a generated site
+  // does not have, and printed "undefined" when there was none to name.
   if (isStatic) {
-    return [signal("static", "high", `${repo.matching(INDEX_HTML)[0]} with no dependency manifest`)];
+    return [signal("static", "high", detected?.evidence ?? "this repository builds to files")];
   }
 
   const commandLine = commandLineEntry(repo);
@@ -80,6 +86,21 @@ export function detectShape(repo: Repo): Signal[] {
   if (scripts.length > 0) {
     return [
       signal("script", "medium", `${scripts.length} source file(s), no manifest, and no web framework`),
+    ];
+  }
+
+  // Documents and nothing else. No manifest, no source, no generator: a
+  // repository like this is prose, and prose is read where it sits or served
+  // as files. Either way there is no process to pay for, which is the answer a
+  // static site already gets.
+  //
+  // Markdown has to outnumber everything else for this to hold. Almost every
+  // repository carries a README, and one of those speaks for its own project,
+  // not for the repository around it.
+  const markdown = repo.matching(MARKDOWN);
+  if (markdown.length > repo.files.length - markdown.length) {
+    return [
+      signal("static", "medium", `${markdown.length} markdown file(s) and nothing else this tool recognizes`),
     ];
   }
 

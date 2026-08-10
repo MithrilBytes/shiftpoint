@@ -77,7 +77,9 @@ describe("framework", () => {
   it("recognizes the frameworks that used to fall through to a script", () => {
     const cases: Array<[Record<string, string>, string]> = [
       [{ "requirements.txt": "fastapi==0.111.0\n" }, "fastapi"],
-      [{ "package.json": JSON.stringify({ dependencies: { astro: "^4" } }) }, "astro"],
+      // With an adapter, because Astro without one builds to files and is
+      // reported as static. Both directions are covered below.
+      [{ "package.json": JSON.stringify({ dependencies: { astro: "^4", "@astrojs/node": "^8" } }) }, "astro"],
       [{ "package.json": JSON.stringify({ dependencies: { "@sveltejs/kit": "^2" } }) }, "sveltekit"],
       [{ Gemfile: 'gem "sinatra"\n' }, "sinatra"],
     ];
@@ -86,6 +88,99 @@ describe("framework", () => {
         expect(values(detectFramework(repo), "framework"), expected).toEqual([expected]);
       });
     }
+  });
+
+  it("reads Astro's build output rather than its name", () => {
+    // Astro's default build writes files. An adapter is the deliberate act
+    // that puts a server behind it, and it cannot be used without being
+    // installed, so the dependency list is where that shows up.
+    const config = 'import { defineConfig } from "astro/config";\nexport default defineConfig({});\n';
+    withRepo({ "package.json": JSON.stringify({ dependencies: { astro: "^4" } }), "astro.config.mjs": config }, (repo) => {
+      expect(values(detectFramework(repo), "framework")).toEqual(["static"]);
+    });
+    withRepo(
+      { "package.json": JSON.stringify({ dependencies: { astro: "^4", "@astrojs/node": "^8" } }), "astro.config.mjs": config },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["astro"]);
+      },
+    );
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { astro: "^4" } }),
+        "astro.config.mjs": 'export default { output: "server" };\n',
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["astro"]);
+      },
+    );
+  });
+
+  it("reads Next's build output rather than its name", () => {
+    // Next runs a server unless next.config exports to files, which is the
+    // same deliberate act as Astro's adapter pointing the other way.
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "next.config.js": 'module.exports = { output: "export" };\n',
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["static"]);
+      },
+    );
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "next.config.js": "module.exports = { reactStrictMode: true };\n",
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["nextjs"]);
+      },
+    );
+    // A line somebody switched off is not configuration.
+    withRepo(
+      {
+        "package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "next.config.js": '// output: "export"\nmodule.exports = {};\n',
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["nextjs"]);
+      },
+    );
+    // One exported docs site does not make the application beside it static.
+    withRepo(
+      {
+        "apps/docs/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "apps/docs/next.config.js": 'module.exports = { output: "export" };\n',
+        "apps/web/package.json": JSON.stringify({ dependencies: { next: "^14" } }),
+        "apps/web/next.config.js": "module.exports = {};\n",
+      },
+      (repo) => {
+        expect(values(detectFramework(repo), "framework")).toEqual(["nextjs"]);
+      },
+    );
+  });
+
+  it("recognizes a generator that leaves no dependency manifest", () => {
+    // Hugo is one binary nobody vendors and Sphinx is installed outside the
+    // project, so neither leaves a manifest. Both leave the configuration file
+    // they are named after and the tree of documents they build from.
+    withRepo({ "hugo.toml": 'baseURL = "https://x.example/"\n', "content/_index.md": "# x\n" }, (repo) => {
+      expect(values(detectFramework(repo), "framework")).toEqual(["static"]);
+    });
+    withRepo({ "conf.py": 'html_theme = "furo"\n', "index.rst": "Title\n=====\n" }, (repo) => {
+      expect(values(detectFramework(repo), "framework")).toEqual(["static"]);
+    });
+  });
+
+  it("does not call a configuration file a site with nothing to build", () => {
+    // Both halves are required. A conf.py with no documents around it is
+    // configuration for something else.
+    withRepo({ "conf.py": "DEBUG = True\n" }, (repo) => {
+      expect(values(detectFramework(repo), "framework")).toEqual(["unknown"]);
+    });
+    withRepo({ "hugo.toml": 'baseURL = "https://x.example/"\n' }, (repo) => {
+      expect(values(detectFramework(repo), "framework")).toEqual(["unknown"]);
+    });
   });
 
   it("reports an unrecognized framework as unknown at low confidence", () => {
@@ -268,6 +363,18 @@ describe("shape", () => {
   it("calls a loose source file a script only when nothing is declared", () => {
     withRepo({ "src/report.py": "print('hi')\n" }, (repo) => {
       expect(values(detectShape(repo), "shape")).toEqual(["script"]);
+    });
+  });
+
+  it("calls a repository of documents and nothing else static", () => {
+    withRepo({ "README.md": "# handbook\n", "docs/onboarding.md": "# week one\n" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["static"]);
+    });
+  });
+
+  it("does not let one README speak for a repository of something else", () => {
+    withRepo({ "README.md": "# dotfiles\n", "install.sh": "set -eu\n", "zsh/.zshrc": "\n", "Brewfile": "\n" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["unknown"]);
     });
   });
 

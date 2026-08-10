@@ -42,10 +42,20 @@ function reachedFromSomeManifest(
   );
 }
 
+/**
+ * Frameworks a bare manifest identifies as static, because a bare manifest is
+ * their default configuration and their default build writes files. The table
+ * entry is still the only thing that makes them identifiable at all, so
+ * deleting one still fails here; what it identifies them as is decided by the
+ * build. detectors.test.ts covers both sides of that decision.
+ */
+const STATIC_BY_DEFAULT = new Map([["astro", "static"]]);
+
 describe("every framework in the table is detectable", () => {
   for (const [dependency, framework] of FRAMEWORK_BY_DEPENDENCY) {
-    it(`${dependency} yields ${framework}`, () => {
-      expect(reachedFromSomeManifest(dependency, detectFramework, "framework", framework)).toBe(true);
+    const expected = STATIC_BY_DEFAULT.get(framework) ?? framework;
+    it(`${dependency} yields ${expected}`, () => {
+      expect(reachedFromSomeManifest(dependency, detectFramework, "framework", expected)).toBe(true);
     });
   }
 });
