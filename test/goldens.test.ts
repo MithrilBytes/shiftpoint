@@ -81,7 +81,7 @@ describe("the free tier comes first", () => {
 
   it("refuses to price a model runtime rather than quoting a server that cannot load it", () => {
     const { verdict, profile } = analyze(join(FIXTURES_DIR, "ml-inference"));
-    expect(profile.fields["blocked_by"]).toContain("heavy_runtime");
+    expect(profile.fields["blocked_by"]).toContain("model_runtime");
     expect(verdict.stage).toContain("sized by the model");
     expect(verdict.stage).not.toMatch(/\$/);
   });

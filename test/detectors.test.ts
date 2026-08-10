@@ -443,8 +443,24 @@ describe("serverless fit", () => {
   });
 
   it("is blocked by a runtime too heavy to cold start", () => {
-    withRepo({ "requirements.txt": "torch==2.3.0\n" }, (repo) => {
+    withRepo({ "requirements.txt": "playwright==1.45.0\n" }, (repo) => {
       expect(detectServerless(repo)[0]?.evidence).toContain("cold start");
+      expect(values(detectServerless(repo), "blocked_by")).toEqual(["heavy_runtime"]);
+    });
+  });
+
+  it("is blocked by a model runtime, which is a different answer", () => {
+    // Both are too big for a function tier, and that is where the likeness
+    // ends. A model decides the machine; a headless browser just needs one.
+    withRepo({ "requirements.txt": "torch==2.3.0\n" }, (repo) => {
+      expect(detectServerless(repo)[0]?.evidence).toContain("sizes the machine");
+      expect(values(detectServerless(repo), "blocked_by")).toEqual(["model_runtime"]);
+    });
+  });
+
+  it("is blocked by a crawl that runs longer than a function tier allows", () => {
+    withRepo({ "requirements.txt": "Scrapy==2.11.2\n" }, (repo) => {
+      expect(values(detectServerless(repo), "blocked_by")).toEqual(["long_running"]);
     });
   });
 });

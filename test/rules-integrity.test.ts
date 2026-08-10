@@ -31,10 +31,14 @@ const VOCABULARY: Record<string, string[]> = {
   orchestration: ["kubernetes", "helm", "terraform", "none"],
   jobs: [
     "sidekiq", "resque", "delayed_job", "good_job", "solid_queue", "celery",
-    "rq", "dramatiq", "huey", "bullmq", "bull", "agenda", "none",
+    "rq", "dramatiq", "huey", "bullmq", "bull", "agenda", "asynq", "machinery",
+    "none",
   ],
   serverless_fit: ["fits", "blocked"],
-  blocked_by: ["background_work", "held_connections", "heavy_runtime", "local_disk", "none"],
+  blocked_by: [
+    "background_work", "held_connections", "long_running", "model_runtime",
+    "heavy_runtime", "local_disk", "none",
+  ],
   commercial: ["yes", "unclear"],
   assets: ["light", "heavy"],
   demand: ["none", "present"],

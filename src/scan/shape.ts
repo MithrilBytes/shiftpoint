@@ -2,14 +2,29 @@ import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
-import { declaredDependencies, manifestFiles, nodeManifests, pythonManifestFiles } from "./manifest.js";
+import { LONG_RUNNING_BATCH, PERSISTENT_CONNECTION, runtimeMatching } from "./serverless.js";
+import {
+  declaredDependencies,
+  goModFiles,
+  manifestFiles,
+  nodeManifests,
+  pythonManifestFiles,
+} from "./manifest.js";
 
 const NOTEBOOK = /\.ipynb$/;
+// Tabular files a repository publishes as its content. Deliberately not .json
+// or .yaml: those are configuration far more often than they are data.
+const DATA_FILE = /\.(csv|tsv|psv|parquet|jsonl|ndjson|arrow|feather|xlsx?)$/i;
 const MARKDOWN = /\.mdx?$/;
 // Only languages a managed or free function tier will actually run. A
 // repository of shell scripts and Swift files is tooling, and telling its
 // owner about Lambda pricing would be noise.
 const SCRIPT_SOURCE = /\.(py|js|mjs|cjs|ts|rb|go)$/;
+// Repositories whose deliverable is the packaging rather than an application.
+const GO_SOURCE = /\.go$/;
+const GO_MAIN_PACKAGE = /^\s*package\s+main\s*$/m;
+const TERRAFORM_FILE = /\.tf(\.json)?$/;
+const CHART_FILE = /(^|\/)Chart\.ya?ml$/;
 
 /**
  * What kind of thing this repository is, which decides whether any hosting
@@ -66,6 +81,31 @@ export function detectShape(repo: Repo): Signal[] {
     return [signal("library", "medium", published)];
   }
 
+  // Not every hosted process answers an HTTP request. A dependency that holds
+  // a connection open is a process somebody is already paying to keep alive: a
+  // chat bot logs in once and stays logged in for as long as it runs. There is
+  // no framework in its manifest and no port to serve on, and saying "we could
+  // not tell" hid a server that plainly exists.
+  //
+  // The same fact is read again by the serverless detector, which is what keeps
+  // this off a function tier. Calling it a service without that would quote $0
+  // for something a function tier cannot host at all.
+  const held = runtimeMatching(repo, PERSISTENT_CONNECTION);
+  if (held.length > 0) {
+    return [
+      signal("service", "high", `${held.join(", ")} holds a connection open for the life of the process`),
+    ];
+  }
+
+  // A batch runtime is the opposite: it starts, works, and stops. That is a
+  // program you run, not a service you host, whatever else is in the manifest.
+  const batch = runtimeMatching(repo, LONG_RUNNING_BATCH);
+  if (batch.length > 0) {
+    return [
+      signal("script", "high", `${batch.join(", ")} runs a batch job rather than serving requests`),
+    ];
+  }
+
   // A project that declares dependencies has been set up to run as something,
   // and if none of them is a framework this tool knows, the honest answer is
   // that it could not tell. Calling it a script instead would route it to the
@@ -83,6 +123,26 @@ export function detectShape(repo: Repo): Signal[] {
   }
 
   // No declared dependencies at all, so loose source files really are loose.
+  //
+  // Unless the data outnumbers them, in which case the data is the deliverable
+  // and the code is a helper that keeps it honest. An open dataset with one
+  // standard library validator CI runs on every pull request is not a thing
+  // anybody hosts, and calling it a script quoted a free function tier for a
+  // file that is never called from outside the repository.
+  //
+  // Strictly outnumbers, on purpose. One fixture next to one script is a script
+  // with a fixture, and this should say nothing about it.
+  const data = repo.matching(DATA_FILE);
+  if (scripts.length > 0 && data.length > scripts.length) {
+    return [
+      signal(
+        "unknown",
+        "low",
+        `${data.length} data file(s) against ${scripts.length} source file(s), so the deliverable here looks like the data rather than the code`,
+      ),
+    ];
+  }
+
   if (scripts.length > 0) {
     return [
       signal("script", "medium", `${scripts.length} source file(s), no manifest, and no web framework`),
@@ -137,6 +197,18 @@ function commandLineEntry(repo: Repo): string | undefined {
 const PUBLISHING_INTENT = ["exports", "files", "publishConfig", "types", "typings"];
 
 function publishedLibrary(repo: Repo): string | undefined {
+  // A GitHub Action is referenced by other repositories and runs on their
+  // runners. It carries a manifest and real dependencies, so it reads like an
+  // application, but nothing about it is ever deployed from here. Only the root
+  // file counts: an application may keep a composite action under .github/ and
+  // that says nothing about the repository as a whole.
+  for (const file of ["action.yml", "action.yaml"]) {
+    if (!repo.has(file)) continue;
+    if (/^runs:/m.test(repo.read(file) ?? "")) {
+      return `${file} declares a GitHub Action, which runs on the caller's runner`;
+    }
+  }
+
   for (const [file, manifest] of nodeManifests(repo)) {
     if (manifest["private"] === true) continue;
     const declared = PUBLISHING_INTENT.filter((key) => manifest[key] !== undefined);
@@ -150,5 +222,30 @@ function publishedLibrary(repo: Repo): string | undefined {
       return `${file} packages this for distribution`;
     }
   }
+
+  // Go states this in the code rather than in the manifest: a module with no
+  // main package builds no binary, so there is nothing to run and consumers
+  // import it. Most Go libraries also declare no dependencies at all, which
+  // used to leave them looking like a folder of loose scripts.
+  const goModule = goModFiles(repo)[0];
+  const goSources = repo.matching(GO_SOURCE);
+  if (goModule !== undefined && goSources.length > 0) {
+    const main = goSources.find((file) => GO_MAIN_PACKAGE.test(repo.read(file) ?? ""));
+    if (main === undefined) {
+      return `${goModule} with no main package in ${goSources.length} Go file(s), so this is imported rather than run`;
+    }
+  }
+
+  // Infrastructure code and no application anywhere near it. A Terraform module
+  // and a chart repository are both packages: other repositories reference them
+  // by source and install them, and nothing is deployed from here. The
+  // discriminator is that there is no application to deploy. The moment a
+  // repository holds both the code and the files that deploy it, those files
+  // describe that deployment and this does not apply.
+  const packaged = repo.matching(TERRAFORM_FILE).length > 0 || repo.matching(CHART_FILE).length > 0;
+  if (packaged && manifestFiles(repo).length === 0 && repo.matching(SCRIPT_SOURCE).length === 0) {
+    return "infrastructure code with no application source and no dependency manifest, so the module is the deliverable";
+  }
+
   return undefined;
 }

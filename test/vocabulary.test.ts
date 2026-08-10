@@ -3,7 +3,14 @@ import { detectCommercial, PROCESSOR_BY_DEPENDENCY } from "../src/scan/commercia
 import { detectDatabase, ENGINE_BY_ALIAS } from "../src/scan/database.js";
 import { detectFramework, FRAMEWORK_BY_DEPENDENCY } from "../src/scan/framework.js";
 import { detectJobs, QUEUE_BY_DEPENDENCY } from "../src/scan/jobs.js";
-import { detectServerless, HEAVY_RUNTIME, PERSISTENT_CONNECTION } from "../src/scan/serverless.js";
+import {
+  detectServerless,
+  HEAVY_RUNTIME,
+  LONG_RUNNING_BATCH,
+  MODEL_RUNTIME,
+  PERSISTENT_CONNECTION,
+} from "../src/scan/serverless.js";
+import { detectShape } from "../src/scan/shape.js";
 import { values, withRepo } from "./helpers.js";
 
 /**
@@ -106,6 +113,72 @@ describe("every serverless blocker in the table blocks", () => {
       expect(blocked).toBe(true);
     });
   }
+
+  for (const dependency of MODEL_RUNTIME) {
+    it(`${dependency} blocks on a model runtime`, () => {
+      const blocked = manifestsFor(dependency).some((files) =>
+        withRepo(files, (repo) => {
+          const signals = detectServerless(repo);
+          return (
+            values(signals, "serverless_fit").includes("blocked") &&
+            values(signals, "blocked_by").includes("model_runtime")
+          );
+        }),
+      );
+      expect(blocked).toBe(true);
+    });
+  }
+
+  for (const dependency of LONG_RUNNING_BATCH) {
+    it(`${dependency} blocks on a run that outlasts a function`, () => {
+      const blocked = manifestsFor(dependency).some((files) =>
+        withRepo(files, (repo) => {
+          const signals = detectServerless(repo);
+          return (
+            values(signals, "serverless_fit").includes("blocked") &&
+            values(signals, "blocked_by").includes("long_running")
+          );
+        }),
+      );
+      expect(blocked).toBe(true);
+    });
+  }
+});
+
+/**
+ * The two sets that also answer a shape question. A held connection makes a
+ * repository a service and a batch runtime makes it a script, and both of those
+ * are read out of the same tables the serverless detector uses. Naming a
+ * dependency in one of them has two consequences, so both are pinned.
+ */
+describe("the sets that decide shape as well as fit", () => {
+  it("reads a bot with no web framework as something you host", () => {
+    withRepo(
+      { "package.json": JSON.stringify({ private: true, dependencies: { "discord.js": "^14" } }) },
+      (repo) => {
+        expect(values(detectShape(repo), "shape")).toEqual(["service"]);
+        expect(values(detectServerless(repo), "blocked_by")).toEqual(["held_connections"]);
+      },
+    );
+  });
+
+  it("reads a crawler as a program that runs rather than a service", () => {
+    withRepo({ "requirements.txt": "Scrapy==2.11.2\n" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["script"]);
+      expect(values(detectServerless(repo), "serverless_fit")).toEqual(["blocked"]);
+    });
+  });
+
+  it("leaves a published package alone even when it depends on one of them", () => {
+    // A websocket client library is still a library. Shape is decided before
+    // these sets are consulted, so publishing intent keeps winning.
+    withRepo(
+      { "package.json": JSON.stringify({ name: "wsclient", exports: "./index.js", dependencies: { ws: "^8" } }) },
+      (repo) => {
+        expect(values(detectShape(repo), "shape")).toEqual(["library"]);
+      },
+    );
+  });
 });
 
 describe("every payment processor in the table reads as commercial", () => {

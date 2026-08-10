@@ -5,6 +5,11 @@ import { detectJobs } from "./jobs.js";
 import { declaredDependencies, runtimeDependencies } from "./manifest.js";
 
 // Dependencies that need a process that outlives a request.
+//
+// Chat clients belong here for the same reason a websocket server does. A bot
+// opens one gateway connection at startup and holds it for the life of the
+// process; nothing routes a request to it, and there is no version of that
+// which fits in a function invocation.
 export const PERSISTENT_CONNECTION = new Set([
   "socket.io",
   "ws",
@@ -15,22 +20,95 @@ export const PERSISTENT_CONNECTION = new Set([
   "faye",
   "pusher",
   "centrifuge",
+  "discord.js",
+  "discord.py",
+  "discordpy",
+  "telegraf",
+  "grammy",
+  "python-telegram-bot",
+  "@slack/bolt",
+  "slack-bolt",
+  "slack_bolt",
+  "irc",
+  "matrix-bot-sdk",
 ]);
 
-// Dependencies too large or too slow to start inside a free function tier.
-export const HEAVY_RUNTIME = new Set([
+/**
+ * Dependencies that describe a batch program rather than a service.
+ *
+ * A crawl runs for as long as it takes, which is minutes or hours once a
+ * politeness delay is in it. Free function tiers stop well short of that, so
+ * this rules out the same tier a held connection does, for the opposite reason:
+ * not a process that never ends, but one run that takes too long.
+ */
+export const LONG_RUNNING_BATCH = new Set(["scrapy", "crawlee", "apify"]);
+
+/**
+ * Production dependencies that fall in one of the sets above.
+ *
+ * Exported because two of these sets answer a shape question as well as a
+ * hosting one, and the shape detector has to read them the same way this file
+ * does: production dependencies only, so a test runner never decides what a
+ * repository is.
+ */
+export function runtimeMatching(repo: Repo, names: ReadonlySet<string>): string[] {
+  return [...runtimeDependencies(repo)].filter((name) => names.has(name)).sort();
+}
+
+/**
+ * Dependencies whose size is set by a model file rather than by traffic.
+ *
+ * Kept apart from the merely heavy because the two lead to different answers.
+ * A model decides how much memory the process needs and whether it needs a GPU
+ * at all, and none of that can be read out of a repository, so the honest reply
+ * is to give no price. "Too big for a function" is a different statement, and
+ * one small server answers it.
+ */
+export const MODEL_RUNTIME = new Set([
   "torch",
   "pytorch",
   "tensorflow",
   "keras",
   "transformers",
+  "sentence-transformers",
+  "diffusers",
+  "accelerate",
   "jax",
+  "onnxruntime",
+  "onnxruntime-gpu",
+  "vllm",
+  "llama-cpp-python",
+  "ctransformers",
+  "openai-whisper",
+  "whisper",
+  "faster-whisper",
+  "whisperx",
+  "spacy",
+  "ultralytics",
+  "scikit-learn",
+  "sklearn",
+  "xgboost",
+  "lightgbm",
+]);
+
+/**
+ * Dependencies too large or too slow to start inside a free function tier.
+ *
+ * Heavy, but sized by ordinary things: a headless browser, a video encoder, a
+ * numerical library. Any of them runs on a small always on server, so the price
+ * is knowable and the ordinary stage rules give it.
+ */
+export const HEAVY_RUNTIME = new Set([
   "opencv-python",
+  "opencv-python-headless",
   "scipy",
   "playwright",
+  "playwright-core",
   "puppeteer",
+  "puppeteer-core",
   "selenium",
   "ffmpeg",
+  "ffmpeg-python",
   "fluent-ffmpeg",
 ]);
 
@@ -62,6 +140,18 @@ export function detectServerless(repo: Repo): Signal[] {
   if (held.length > 0) {
     blockers.push(`${held.join(", ")} holds connections open`);
     kinds.push("held_connections");
+  }
+
+  const batch = [...dependencies].filter((name) => LONG_RUNNING_BATCH.has(name)).sort();
+  if (batch.length > 0) {
+    blockers.push(`${batch.join(", ")} runs for longer than a function tier allows`);
+    kinds.push("long_running");
+  }
+
+  const models = [...dependencies].filter((name) => MODEL_RUNTIME.has(name)).sort();
+  if (models.length > 0) {
+    blockers.push(`${models.join(", ")} loads a model, and the model sizes the machine`);
+    kinds.push("model_runtime");
   }
 
   const heavy = [...dependencies].filter((name) => HEAVY_RUNTIME.has(name)).sort();

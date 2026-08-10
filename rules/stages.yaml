@@ -48,9 +48,14 @@ stages:
   # small server price here would be worse than useless, because the cheapest
   # servers cannot load these libraries at all. This rule deliberately gives no
   # number rather than a wrong one.
+  #
+  # It asks for model_runtime and not heavy_runtime on purpose. Plenty of things
+  # are too heavy for a function tier without being sized by a model: a headless
+  # browser rendering PDFs is one, and it wants a server and a price, not a
+  # lecture about GPUs. Those fall through to the ordinary rules below.
   - id: model-runtime
     when:
-      blocked_by: [heavy_runtime]
+      blocked_by: [model_runtime]
     confidence: medium
     # This verdict asks for work: price the model against its hardware. Saying
     # "Do nothing today." underneath that would contradict it.
@@ -77,6 +82,8 @@ stages:
           bullmq,
           bull,
           agenda,
+          asynq,
+          machinery,
         ]
     cost_low: 25
     cost_high: 40
@@ -133,6 +140,7 @@ stages:
       shape: [service]
       serverless_fit: [fits]
       database: [postgres, mysql, mongo]
+      demand: [none]
     free_storage: 0.5 GB
     next_tier_cost: 5
     confidence: medium
@@ -145,6 +153,7 @@ stages:
     when:
       shape: [service]
       serverless_fit: [fits]
+      demand: [none]
     free_requests: 100,000
     next_tier_cost: 5
     confidence: medium

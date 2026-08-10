@@ -1,6 +1,12 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
-import { manifestFiles, nodeDependencies, pythonDependencies, rubyDependencies } from "./manifest.js";
+import {
+  goDependencies,
+  manifestFiles,
+  nodeDependencies,
+  pythonDependencies,
+  rubyDependencies,
+} from "./manifest.js";
 
 // Queue libraries this tool recognizes, mapped onto the engine's vocabulary.
 export const QUEUE_BY_DEPENDENCY = new Map<string, string>([
@@ -17,6 +23,10 @@ export const QUEUE_BY_DEPENDENCY = new Map<string, string>([
   ["bullmq", "bullmq"],
   ["bull", "bull"],
   ["agenda", "agenda"],
+  // Go. Matched on the normalised segments goDependencies produces, the same
+  // way the framework detector matches chi and gin.
+  ["asynq", "asynq"],
+  ["machinery", "machinery"],
 ]);
 
 /**
@@ -35,6 +45,10 @@ export function detectJobs(repo: Repo): Signal[] {
   for (const name of nodeDependencies(repo)) note(name, `package.json depends on ${name}`);
   for (const name of pythonDependencies(repo)) note(name, `a python manifest requires ${name}`);
   for (const name of rubyDependencies(repo)) note(name, `Gemfile requires ${name}`);
+  // Go was the one language this detector did not read, so a Go service with a
+  // worker binary consuming a queue looked like it had no background work at
+  // all and was quoted a free tier.
+  for (const name of goDependencies(repo)) note(name, `go.mod requires ${name}`);
 
   if (found.size > 0) {
     return [
