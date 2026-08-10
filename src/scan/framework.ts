@@ -1,6 +1,8 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import {
+  cargoDependencies,
+  cargoFiles,
   composerFiles,
   gemfiles,
   goDependencies,
@@ -148,6 +150,16 @@ export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
   ["gin", "gin"],
   ["echo", "echo"],
   ["fiber", "fiber"],
+  // Rust. A crate that puts an HTTP server in the process, which is what
+  // separates a service from the far more common Rust repository: a program
+  // somebody installs.
+  ["actix-web", "actix"],
+  ["axum", "axum"],
+  ["rocket", "rocket"],
+  ["warp", "warp"],
+  ["poem", "poem"],
+  ["salvo", "salvo"],
+  ["tide", "tide"],
   // PHP, keeping the vendor prefix composer.json writes
   ["laravel/framework", "laravel"],
   ["laravel/lumen-framework", "laravel"],
@@ -192,6 +204,14 @@ export function detectFramework(repo: Repo): Signal[] {
     languages.push("go");
     languageEvidence.push("go.mod");
   }
+  // A Cargo.toml states what a project runs on as plainly as a go.mod does.
+  // Without it a Rust repository had no language at all, and the tool answered
+  // "we could not tell what this repository runs" for a manifest that names the
+  // package, its version and every crate it links.
+  if (cargoFiles(repo).length > 0) {
+    languages.push("rust");
+    languageEvidence.push("Cargo.toml");
+  }
   // Languages this tool identifies without being able to reason about them. A
   // composer.json is as plain a statement of what a project runs on as a
   // Gemfile is, and refusing to read it made the single most common shape of
@@ -231,6 +251,7 @@ export function detectFramework(repo: Repo): Signal[] {
     [pythonDependencies(repo), "a python manifest requires"],
     [rubyDependencies(repo), "Gemfile requires"],
     [goDependencies(repo), "go.mod requires"],
+    [cargoDependencies(repo), "Cargo.toml depends on"],
     ...otherLanguageSources(repo),
   ];
 
@@ -302,6 +323,7 @@ const SOURCE_LANGUAGES: Array<{ pattern: RegExp; value: string }> = [
   { pattern: /\.[cm]?[jt]sx?$/, value: "node" },
   { pattern: /\.rb$/, value: "ruby" },
   { pattern: /\.go$/, value: "go" },
+  { pattern: /\.rs$/, value: "rust" },
 ];
 
 function languageFromSources(repo: Repo): Signal {

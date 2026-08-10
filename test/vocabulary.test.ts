@@ -34,6 +34,7 @@ function manifestsFor(name: string): Array<Record<string, string>> {
     { "requirements.txt": `${name}==1.0.0\n` },
     { Gemfile: `source "https://rubygems.org"\ngem "${name}"\n` },
     { "go.mod": `module example.com/a\n\ngo 1.22\n\nrequire github.com/example/${name} v1.0.0\n` },
+    { "Cargo.toml": `[package]\nname = "a"\nversion = "0.1.0"\n\n[dependencies]\n${name} = "1"\n` },
   ];
 }
 

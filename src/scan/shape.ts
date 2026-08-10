@@ -1,9 +1,12 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
+import { detectContainer } from "./container.js";
 import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
+import { detectOrchestration } from "./orchestration.js";
 import { LONG_RUNNING_BATCH, PERSISTENT_CONNECTION, runtimeMatching } from "./serverless.js";
 import {
+  cargoFiles,
   declaredDependencies,
   goModFiles,
   manifestFiles,
@@ -25,6 +28,25 @@ const GO_SOURCE = /\.go$/;
 const GO_MAIN_PACKAGE = /^\s*package\s+main\s*$/m;
 const TERRAFORM_FILE = /\.tf(\.json)?$/;
 const CHART_FILE = /(^|\/)Chart\.ya?ml$/;
+
+// What a Cargo package builds. A [[bin]] section names a binary outright, and
+// cargo builds one from src/main.rs or src/bin/*.rs without being asked. A
+// [lib] section or src/lib.rs is the other half of the same question.
+const RUST_BINARY_TARGET = /^\s*\[\[bin\]\]/m;
+const RUST_BINARY_SOURCE = /^src\/(main\.rs|bin\/[^/]+\.rs)$/;
+const RUST_LIBRARY_TARGET = /^\s*\[lib\]/m;
+
+// A directory whose name says the files in it are programs meant for a PATH.
+const PROGRAM_DIRECTORY = /^(bin|sbin|libexec)\//;
+const SHEBANG = /^#!/;
+const MAKEFILE = /(^|\/)(GNUmakefile|[Mm]akefile)$/;
+
+// Where a repository states what its build does, whatever runs the build.
+const CI_FILE =
+  /^(\.github\/workflows\/[^/]+\.ya?ml|\.gitlab-ci\.ya?ml|\.circleci\/config\.ya?ml)$|(^|\/)(Jenkinsfile|GNUmakefile|[Mm]akefile)$/;
+// A build step that sends the image it just built to a registry.
+const PUSHES_AN_IMAGE =
+  /docker\/build-push-action|\b(docker|podman|buildah|nerdctl)\s+(image\s+)?push\b|(^|\s)--push(\s|$)|\bskopeo\s+copy\b|\bkaniko\b/;
 
 /**
  * What kind of thing this repository is, which decides whether any hosting
@@ -104,6 +126,15 @@ export function detectShape(repo: Repo): Signal[] {
     return [
       signal("script", "high", `${batch.join(", ")} runs a batch job rather than serving requests`),
     ];
+  }
+
+  // Languages that declare no entry point in their manifest state it in what
+  // they build instead, so this is asked last: after a framework, after a held
+  // connection, after a batch runtime. Everything above is a process somebody
+  // hosts, and a repository that ships a binary can be either.
+  const program = commandLineProgram(repo);
+  if (program !== undefined) {
+    return [signal("cli", "high", program)];
   }
 
   // A project that declares dependencies has been set up to run as something,
@@ -236,16 +267,216 @@ function publishedLibrary(repo: Repo): string | undefined {
     }
   }
 
+  // Rust says the same thing in its manifest and its layout. A crate that
+  // builds a library and no binary is linked into somebody else's program,
+  // which is what a crate published to crates.io or wrapped up by wasm-pack is
+  // for. Requiring the absence of a binary is the whole of it: a command line
+  // tool commonly keeps its logic in src/lib.rs too, and that alone would have
+  // called every one of them a library.
+  const cargo = cargoFiles(repo)[0];
+  if (cargo !== undefined && !buildsARustBinary(repo, cargo)) {
+    if (RUST_LIBRARY_TARGET.test(repo.read(cargo) ?? "") || repo.has("src/lib.rs")) {
+      return `${cargo} builds a library and no binary, so this is linked into other programs`;
+    }
+  }
+
   // Infrastructure code and no application anywhere near it. A Terraform module
   // and a chart repository are both packages: other repositories reference them
   // by source and install them, and nothing is deployed from here. The
   // discriminator is that there is no application to deploy. The moment a
   // repository holds both the code and the files that deploy it, those files
   // describe that deployment and this does not apply.
+  const nothingToDeploy = manifestFiles(repo).length === 0 && repo.matching(SCRIPT_SOURCE).length === 0;
   const packaged = repo.matching(TERRAFORM_FILE).length > 0 || repo.matching(CHART_FILE).length > 0;
-  if (packaged && manifestFiles(repo).length === 0 && repo.matching(SCRIPT_SOURCE).length === 0) {
+  if (packaged && nothingToDeploy) {
     return "infrastructure code with no application source and no dependency manifest, so the module is the deliverable";
   }
 
+  // The same argument for a container image, with one more thing required of
+  // it. A Dockerfile on its own proves nothing: most repositories that carry
+  // one carry it because that is how their application ships, and a Dockerfile
+  // with nothing beside it is an incomplete repository rather than a package.
+  // What makes the image the deliverable is a build that pushes it to a
+  // registry with no application of its own anywhere near it. Other
+  // repositories then write FROM and consume it exactly as they consume a
+  // package, which is publication in the sense every other branch here means.
+  //
+  // Only a Dockerfile at the root counts, for the reason the GitHub Action
+  // above is read only at the root: an application may keep one in a
+  // subdirectory and that says nothing about the repository as a whole.
+  if (repo.has("Dockerfile") && nothingToDeploy) {
+    const build = repo.files.find((file) => CI_FILE.test(file) && PUSHES_AN_IMAGE.test(repo.read(file) ?? ""));
+    if (build !== undefined) {
+      return `${build} pushes the image Dockerfile builds, and there is no application here to deploy`;
+    }
+  }
+
+  return undefined;
+}
+
+function buildsARustBinary(repo: Repo, cargo: string): boolean {
+  return RUST_BINARY_TARGET.test(repo.read(cargo) ?? "") || repo.matching(RUST_BINARY_SOURCE).length > 0;
+}
+
+/**
+ * Libraries whose whole purpose is to turn argv into a program's options.
+ *
+ * A dependency on one of these is a repository saying, in its manifest, that a
+ * person types this name and some words after it. No service needs one to be
+ * reached.
+ */
+const ARGUMENT_PARSER = new Set([
+  // Rust
+  "clap",
+  "structopt",
+  "argh",
+  "gumdrop",
+  "pico-args",
+  "lexopt",
+  "bpaf",
+  // Go, matched on the normalised segments goDependencies produces
+  "cobra",
+  "urfave",
+  "kingpin",
+  "pflag",
+  "go-flags",
+  // Python
+  "click",
+  "typer",
+  "docopt",
+  // Node
+  "commander",
+  "yargs",
+  "cac",
+  "meow",
+  "@oclif/core",
+  // Ruby
+  "thor",
+  "gli",
+]);
+
+/** The same thing said with the standard library instead of a dependency. */
+const STANDARD_ARGUMENT_PARSING =
+  /\bflag\.(Parse|Args?|String|Int|Int64|Bool|Float64|Duration|Var)\(|\benv::args\b|\bArgumentParser\(|\bgetopts?\b/;
+
+/**
+ * A call that opens a listening socket.
+ *
+ * A process that waits for connections is hosted, not installed, whatever it
+ * read off its own command line on the way up. A metrics exporter takes
+ * --listen from argv and is still a process somebody keeps running, and without
+ * this every daemon that accepts a flag would read as a tool you download.
+ */
+const LISTENS_FOR_CONNECTIONS =
+  /\bListenAndServe(TLS)?\(|\bnet\.Listen\(|\bTcpListener::bind\(|\bHttpServer::new\(|\bserve_forever\(|\.listen\(/;
+
+interface Program {
+  /** The sources that are the program's own entry point. */
+  files: string[];
+  evidence: string;
+}
+
+/**
+ * A program somebody installs and runs from a shell.
+ *
+ * Two independent things have to be true, because either alone is worthless.
+ * The repository has to ship something executable, and that executable has to
+ * be driven from a command line. Every web service compiles to a binary too, so
+ * "this builds a binary" identifies nothing on its own; and a repository full
+ * of argument parsing with nothing to install is a library of helpers.
+ *
+ * Said that way it holds across languages that declare it very differently: a
+ * Cargo binary target with clap, a Go main package that calls flag.Parse, a
+ * directory of shell programs a Makefile copies onto a PATH. Node and Python
+ * are already answered earlier and more directly, by the bin field and the
+ * console script entry point their manifests carry.
+ */
+function commandLineProgram(repo: Repo): string | undefined {
+  const program = executableProgram(repo);
+  if (program === undefined) return undefined;
+  if (program.files.some((file) => LISTENS_FOR_CONNECTIONS.test(repo.read(file) ?? ""))) return undefined;
+  if (shipsAsARunningProcess(repo)) return undefined;
+
+  const driven = commandLineInterface(repo, program.files);
+  return driven === undefined ? undefined : `${program.evidence}, and ${driven}`;
+}
+
+/**
+ * The repository also says how to keep this thing running somewhere.
+ *
+ * Nobody writes a Deployment for a program people install on their laptops.
+ * A binary that arrives with an image to run it, a compose file, or a chart is
+ * a process its owner runs, however many flags it accepts on the way up: a
+ * queue consumer takes --brokers and is still a daemon.
+ *
+ * Falling silent here costs a command line tool that happens to publish an
+ * image nothing but the answer it already got, "we could not tell". Getting it
+ * wrong the other way tells the owner of a running process there is nothing to
+ * host, which is the expensive direction.
+ */
+function shipsAsARunningProcess(repo: Repo): boolean {
+  const container = detectContainer(repo).find((found) => found.kind === "container")?.values ?? ["none"];
+  const orchestration = detectOrchestration(repo)[0]?.values ?? ["none"];
+  return !container.includes("none") || !orchestration.includes("none");
+}
+
+/** What this repository builds or ships that a person could execute. */
+function executableProgram(repo: Repo): Program | undefined {
+  const cargo = cargoFiles(repo)[0];
+  if (cargo !== undefined && buildsARustBinary(repo, cargo)) {
+    const sources = repo.matching(RUST_BINARY_SOURCE);
+    return {
+      files: sources,
+      evidence: RUST_BINARY_TARGET.test(repo.read(cargo) ?? "")
+        ? `${cargo} declares a binary target`
+        : `${cargo} and ${sources[0]}, which cargo builds as a binary`,
+    };
+  }
+
+  const goModule = goModFiles(repo)[0];
+  if (goModule !== undefined) {
+    const mains = repo.matching(GO_SOURCE).filter((file) => GO_MAIN_PACKAGE.test(repo.read(file) ?? ""));
+    if (mains.length > 0) {
+      return { files: mains, evidence: `${goModule} with a main package in ${mains[0]}, which builds a binary` };
+    }
+  }
+
+  // Nothing compiles here: the file that is checked in is the program. A
+  // shebang says it runs on its own, and the directory says it is meant for
+  // somebody's PATH rather than being a helper the build calls.
+  const shipped = repo.matching(PROGRAM_DIRECTORY).filter((file) => SHEBANG.test(repo.read(file) ?? ""));
+  if (shipped.length > 0) {
+    return { files: shipped, evidence: `${shipped.length} executable program(s) checked in, including ${shipped[0]}` };
+  }
+
+  return undefined;
+}
+
+/** Evidence that the program above is driven by what a person types after it. */
+function commandLineInterface(repo: Repo, sources: string[]): string | undefined {
+  const parsers = [...declaredDependencies(repo)].filter((name) => ARGUMENT_PARSER.has(name)).sort();
+  if (parsers.length > 0) return `${parsers.join(", ")} parses its command line`;
+
+  const parses = sources.find((file) => STANDARD_ARGUMENT_PARSING.test(repo.read(file) ?? ""));
+  if (parses !== undefined) return `${parses} reads its own arguments`;
+
+  return installsOntoPath(repo);
+}
+
+/**
+ * An install target that writes into a directory called bin.
+ *
+ * That is the plainest statement a repository can make that what it produces
+ * belongs on somebody's PATH. It is deliberately not "has an install target":
+ * half the projects on earth have one that installs their dependencies, and
+ * where it writes is what separates the two.
+ */
+function installsOntoPath(repo: Repo): string | undefined {
+  for (const file of repo.matching(MAKEFILE)) {
+    const recipe = /^install:.*\n((?:[ \t]+\S.*\n?)*)/m.exec(repo.read(file) ?? "")?.[1];
+    if (recipe !== undefined && /\bbin\b/.test(recipe)) {
+      return `${file} installs into a bin directory, so this belongs on a PATH`;
+    }
+  }
   return undefined;
 }

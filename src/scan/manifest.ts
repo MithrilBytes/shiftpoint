@@ -12,6 +12,7 @@ const REQUIREMENTS = /(^|\/)requirements[^/]*\.txt$/;
 const PYPROJECT = /(^|\/)(pyproject\.toml|Pipfile|setup\.py)$/;
 const GEMFILE = /(^|\/)Gemfile$/;
 const GO_MOD = /(^|\/)go\.mod$/;
+const CARGO_TOML = /(^|\/)Cargo\.toml$/;
 const COMPOSE = /(^|\/)(docker-)?compose\.ya?ml$/;
 
 // Manifests this tool reads to identify a project rather than to reason about
@@ -31,6 +32,7 @@ export function manifestFiles(repo: Repo): string[] {
       PYPROJECT.test(file) ||
       GEMFILE.test(file) ||
       GO_MOD.test(file) ||
+      CARGO_TOML.test(file) ||
       COMPOSER_JSON.test(file) ||
       MIX_EXS.test(file) ||
       JVM_BUILD.test(file),
@@ -47,6 +49,10 @@ export function gemfiles(repo: Repo): string[] {
 
 export function goModFiles(repo: Repo): string[] {
   return repo.matching(GO_MOD);
+}
+
+export function cargoFiles(repo: Repo): string[] {
+  return repo.matching(CARGO_TOML);
 }
 
 export function pythonManifestFiles(repo: Repo): string[] {
@@ -191,6 +197,8 @@ export function runtimeDependencies(repo: Repo): Set<string> {
   for (const name of pythonDependencies(repo)) names.add(name);
   for (const name of rubyDependencies(repo)) names.add(name);
   for (const name of goDependencies(repo)) names.add(name);
+  // Cargo does draw the distinction, in a table of its own, so it is honoured.
+  for (const name of cargoDependencies(repo, false)) names.add(name);
   return names;
 }
 
@@ -274,6 +282,54 @@ export function goDependencies(repo: Repo): Set<string> {
   return names;
 }
 
+/** The Cargo tables that name a crate this package depends on. */
+const CARGO_DEPENDENCY_TABLE = new Set(["dependencies", "dev-dependencies", "build-dependencies"]);
+
+/**
+ * Crate names from every Cargo.toml.
+ *
+ * Cargo separates what a program links at run time from what only its tests and
+ * its build script need, the same distinction package.json draws between
+ * dependencies and devDependencies, so this can honour it.
+ *
+ * Both spellings of a dependency table are read: the `[dependencies]` block
+ * with one crate per line, and the `[dependencies.serde]` block a crate gets
+ * when its options do not fit on one. Platform blocks such as
+ * `[target.'cfg(unix)'.dependencies]` end in the same table name and are read
+ * with the rest. This is not TOML parsing; it is the one line each entry uses
+ * to name a crate.
+ */
+export function cargoDependencies(repo: Repo, includeDevelopment = true): Set<string> {
+  const names = new Set<string>();
+  const wanted = (table: string): boolean =>
+    table === "dependencies" || (includeDevelopment && CARGO_DEPENDENCY_TABLE.has(table));
+
+  for (const file of cargoFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+
+    let inside = false;
+    for (const rawLine of text.split("\n")) {
+      const line = rawLine.split("#")[0]?.trim() ?? "";
+      const header = /^\[\[?([^\]]+)\]\]?$/.exec(line);
+      if (header !== null) {
+        const parts = (header[1] ?? "").split(".");
+        const last = parts[parts.length - 1] ?? "";
+        const parent = parts[parts.length - 2] ?? "";
+        inside = CARGO_DEPENDENCY_TABLE.has(last) && wanted(last);
+        // [dependencies.clap] names the crate in the header itself.
+        if (!inside && CARGO_DEPENDENCY_TABLE.has(parent) && wanted(parent)) names.add(last.toLowerCase());
+        continue;
+      }
+      if (!inside) continue;
+      const name = /^([A-Za-z0-9_-]+)\s*=/.exec(line)?.[1];
+      if (name !== undefined) names.add(name.toLowerCase());
+    }
+  }
+
+  return names;
+}
+
 /** Everything the repository declares it depends on, whatever the language. */
 export function declaredDependencies(repo: Repo): Set<string> {
   const names = new Set([
@@ -281,6 +337,7 @@ export function declaredDependencies(repo: Repo): Set<string> {
     ...pythonDependencies(repo),
     ...rubyDependencies(repo),
     ...goDependencies(repo),
+    ...cargoDependencies(repo),
   ]);
   for (const [other] of otherLanguageSources(repo)) {
     for (const name of other) names.add(name);

@@ -18,12 +18,13 @@ const rules = loadRules(RULES_DIR);
  * vocabulary should be something somebody decided, not something that drifted.
  */
 const VOCABULARY: Record<string, string[]> = {
-  language: ["node", "python", "ruby", "go", "php", "elixir", "java", "none"],
+  language: ["node", "python", "ruby", "go", "php", "elixir", "java", "rust", "none"],
   framework: [
     "nextjs", "express", "fastify", "koa", "hono", "nestjs", "astro", "nuxt",
     "sveltekit", "remix", "flask", "django", "fastapi", "rails", "sinatra",
     "chi", "gin", "echo", "fiber", "laravel", "symfony", "slim", "phoenix",
-    "spring-boot", "ktor", "static", "unknown",
+    "spring-boot", "ktor", "actix", "axum", "rocket", "warp", "poem", "salvo",
+    "tide", "static", "unknown",
   ],
   shape: ["service", "notebook", "static", "cli", "library", "script", "unknown"],
   apps: ["one", "several"],
