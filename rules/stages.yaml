@@ -139,7 +139,10 @@ stages:
     when:
       shape: [service]
       serverless_fit: [fits]
-      database: [postgres, mysql, mongo]
+      # Databases somebody else runs, backs up, and keeps off this machine's
+      # disk. D1 is Cloudflare's, and it belongs here rather than beside SQLite:
+      # the file a Worker talks to is not on a disk the Worker owns.
+      database: [postgres, mysql, mongo, d1]
       demand: [none]
     free_storage: 0.5 GB
     next_tier_cost: 5
@@ -165,7 +168,7 @@ stages:
   - id: app-with-managed-database
     when:
       shape: [service]
-      database: [postgres, mysql, mongo]
+      database: [postgres, mysql, mongo, d1]
     cost_low: 19
     cost_high: 25
     daily_users: 5k
@@ -217,7 +220,7 @@ stages:
 
   - id: known-language-only
     when:
-      language: [node, python, ruby, go, php, elixir, java, rust]
+      language: [node, python, ruby, go, rust, php, elixir, java, dotnet, deno, perl, sql]
     confidence: low
     # An abstention. The tool understood nothing here, so it is in no position
     # to affirm that nothing needs changing.

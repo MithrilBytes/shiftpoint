@@ -125,7 +125,62 @@ export const HEAVY_RUNTIME = new Set([
  *
  * This is about where the code can run, not about the language.
  */
-export const NO_FREE_TIER_RUNTIME = new Set(["php", "java", "elixir"]);
+export const NO_FREE_TIER_RUNTIME = new Set(["php", "java", "elixir", "dotnet", "perl"]);
+
+// Scanning source files is the expensive path, so it is bounded.
+const MAX_SOURCE_FILES_SCANNED = 200;
+
+const PHP_SOURCE = /\.php$/;
+// A PHP page that touches the request is answering one. Nothing else in the
+// file says so: there is no main, no listen call, and usually no manifest.
+const PHP_REQUEST = /\$_(GET|POST|REQUEST|SERVER|SESSION|COOKIE|FILES)\b|\bheader\s*\(\s*["']/;
+
+const CGI_SOURCE = /\.(cgi|pl)$/;
+const CGI_BIN = /(^|\/)cgi-bin\//;
+// Server configuration that hands a request to a program instead of returning
+// a file. Read only from files that are server configuration, so this stays a
+// handful of reads rather than a scan of the repository.
+const SERVER_CONFIG = /(^|\/)(\.htaccess|[^/]+\.conf)$/;
+const CGI_HANDLER = /ScriptAlias|AddHandler\s+cgi-script|SetHandler\s+cgi-script|Options\s+\+?ExecCGI/;
+
+/**
+ * Source a web server executes, rather than a process anybody starts.
+ *
+ * A PHP page under a document root and a CGI script under a ScriptAlias are
+ * both applications with no main function, no port of their own, and often no
+ * dependency manifest. The web server receives a request and runs the file.
+ * That is how a great deal of the web is still built, and a repository full of
+ * those files is plainly something you host even though every signal this tool
+ * usually reads is missing.
+ *
+ * It is read here rather than in the shape detector because it answers two
+ * questions at once, the way a held connection does: what this repository is,
+ * and why no free function tier will take it. A function tier sells an
+ * invocation, not a web server configured to execute your files.
+ */
+export function serverExecutedSource(repo: Repo): string | undefined {
+  for (const file of repo.matching(PHP_SOURCE).slice(0, MAX_SOURCE_FILES_SCANNED)) {
+    if (PHP_REQUEST.test(repo.read(file) ?? "")) {
+      return `${file} reads the request directly, so a web server runs it per request`;
+    }
+  }
+
+  const scripts = repo.matching(CGI_SOURCE);
+  const underCgiBin = scripts.filter((file) => CGI_BIN.test(file));
+  if (underCgiBin[0] !== undefined) {
+    return `${underCgiBin[0]} sits under cgi-bin, which a web server executes per request`;
+  }
+
+  if (scripts[0] !== undefined) {
+    for (const file of repo.matching(SERVER_CONFIG).slice(0, MAX_SOURCE_FILES_SCANNED)) {
+      if (CGI_HANDLER.test(repo.read(file) ?? "")) {
+        return `${file} configures a web server to execute ${scripts[0]}`;
+      }
+    }
+  }
+
+  return undefined;
+}
 
 /**
  * Whether this could run on a serverless or managed free tier, and if not, what
@@ -182,6 +237,14 @@ export function detectServerless(repo: Repo): Signal[] {
   if (unsupported.length > 0) {
     blockers.push(`the free managed tiers do not run ${unsupported.join(", ")}`);
     kinds.push("no_free_tier_runtime");
+  }
+
+  // Files a web server executes need a web server. A function tier sells an
+  // invocation and gives you nowhere to configure one.
+  const served = serverExecutedSource(repo);
+  if (served !== undefined) {
+    blockers.push(`${served}, and a free function tier has no web server to configure`);
+    kinds.push("server_executed");
   }
 
   // A repository that holds no code of its own, and a compose file pinning

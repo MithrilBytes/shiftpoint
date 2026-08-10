@@ -4,10 +4,17 @@ import { detectContainer } from "./container.js";
 import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
 import { detectOrchestration } from "./orchestration.js";
-import { LONG_RUNNING_BATCH, PERSISTENT_CONNECTION, runtimeMatching } from "./serverless.js";
+import {
+  LONG_RUNNING_BATCH,
+  PERSISTENT_CONNECTION,
+  runtimeMatching,
+  serverExecutedSource,
+} from "./serverless.js";
 import {
   cargoFiles,
+  composeServices,
   declaredDependencies,
+  deployedImages,
   goModFiles,
   manifestFiles,
   nodeManifests,
@@ -93,6 +100,16 @@ export function detectShape(repo: Repo): Signal[] {
     return [signal("static", "high", detected?.evidence ?? "this repository builds to files")];
   }
 
+  // Not every application is a process somebody starts. A PHP page and a CGI
+  // script are run by a web server when a request arrives, which is why neither
+  // declares a framework or opens a port. This is checked before the packaging
+  // questions below because those read manifests, and repositories built this
+  // way usually have none at all.
+  const served = serverExecutedSource(repo);
+  if (served !== undefined) {
+    return [signal("service", "high", served)];
+  }
+
   const commandLine = commandLineEntry(repo);
   if (commandLine !== undefined) {
     return [signal("cli", "high", commandLine)];
@@ -101,6 +118,28 @@ export function detectShape(repo: Repo): Signal[] {
   const published = publishedLibrary(repo);
   if (published !== undefined) {
     return [signal("library", "medium", published)];
+  }
+
+  // A platform manifest states what runs as plainly as a framework dependency
+  // does. A Procfile's web process is the one the platform routes HTTP traffic
+  // to, and every platform that reads a Procfile keeps it running. Repositories
+  // whose whole content is the deployment are common, and answering "we could
+  // not tell what this runs" about a file that names the process is a failure
+  // to read the one thing the author wrote down.
+  const declaredWeb = webProcess(repo);
+  if (declaredWeb !== undefined) {
+    return [signal("service", "high", declaredWeb)];
+  }
+
+  // No code of its own, and a compose file pinning somebody else's image: this
+  // repository is not the application, it is the deployment of one. The
+  // serverless detector already reads the same fact to rule out a function
+  // tier, and shape was the half still saying it could not tell.
+  const deployed = deployedImages(repo);
+  if (deployed.length > 0 && (composeServices(repo)?.hostBound.length ?? 0) === 0) {
+    return [
+      signal("service", "high", `a compose file runs ${deployed.join(", ")} from a prebuilt image`),
+    ];
   }
 
   // Not every hosted process answers an HTTP request. A dependency that holds
@@ -200,6 +239,22 @@ export function detectShape(repo: Repo): Signal[] {
 
 function signal(value: string, confidence: Signal["confidence"], evidence: string): Signal {
   return { kind: "shape", values: [value], confidence, evidence };
+}
+
+const PROCFILE = /(^|\/)Procfile(\.[^/]+)?$/;
+// The one process type every platform that reads a Procfile routes traffic to.
+// A worker line is background work, which the jobs detector answers, and a
+// release line runs once and exits.
+const WEB_PROCESS = /^\s*web\s*:\s*\S/m;
+
+/** A declared web process: something is served, whatever is behind it. */
+function webProcess(repo: Repo): string | undefined {
+  for (const file of repo.matching(PROCFILE)) {
+    if (WEB_PROCESS.test(repo.read(file) ?? "")) {
+      return `${file} declares a web process, which is the one a platform routes requests to`;
+    }
+  }
+  return undefined;
 }
 
 /** A bin entry or a console script is a thing you install, not a thing you host. */

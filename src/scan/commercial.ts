@@ -26,6 +26,31 @@ const BUSINESS_TOOLING = new Set([
   "analytics-node",
 ]);
 
+/**
+ * Payment and storefront platforms named in the environment.
+ *
+ * Plenty of applications call one of these over plain HTTP and carry no SDK at
+ * all, so the dependency list shows nothing. The credential in .env says the
+ * same thing the dependency would: this repository is wired to somebody's
+ * merchant account, and a plan licensed for personal use does not cover that.
+ */
+const MERCHANT_CREDENTIAL = [
+  "stripe",
+  "shopify",
+  "paddle",
+  "lemonsqueezy",
+  "braintree",
+  "paypal",
+  "adyen",
+  "chargebee",
+  "recurly",
+  "mollie",
+  "razorpay",
+];
+
+const ENV_FILE = /(^|\/)\.env(\.example|\.sample|\.template)?$/;
+const ENV_VARIABLE = /^\s*(?:export\s+)?([A-Za-z][A-Za-z0-9_]*)\s*=/gm;
+
 // Routes that only exist when someone is being sold something.
 //
 // Anchored to the directories frameworks actually serve routes from. Matched
@@ -60,6 +85,17 @@ export function detectCommercial(repo: Repo): Signal[] {
     }
     if (BUSINESS_TOOLING.has(name)) {
       other.push(`a manifest depends on ${name}`);
+    }
+  }
+
+  for (const file of repo.matching(ENV_FILE)) {
+    const text = repo.read(file) ?? "";
+    for (const match of text.matchAll(ENV_VARIABLE)) {
+      const name = (match[1] ?? "").toLowerCase().replace(/_/g, "");
+      const platform = MERCHANT_CREDENTIAL.find((vendor) => name.includes(vendor));
+      if (platform !== undefined && !processors.has(platform)) {
+        processors.set(platform, `${file} sets ${match[1]}`);
+      }
     }
   }
 

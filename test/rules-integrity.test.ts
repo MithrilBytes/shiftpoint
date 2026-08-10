@@ -18,7 +18,10 @@ const rules = loadRules(RULES_DIR);
  * vocabulary should be something somebody decided, not something that drifted.
  */
 const VOCABULARY: Record<string, string[]> = {
-  language: ["node", "python", "ruby", "go", "php", "elixir", "java", "rust", "none"],
+  language: [
+    "node", "python", "ruby", "go", "rust", "php", "elixir", "java", "dotnet",
+    "deno", "perl", "sql", "none",
+  ],
   framework: [
     "nextjs", "express", "fastify", "koa", "hono", "nestjs", "astro", "nuxt",
     "sveltekit", "remix", "flask", "django", "fastapi", "rails", "sinatra",
@@ -28,7 +31,7 @@ const VOCABULARY: Record<string, string[]> = {
   ],
   shape: ["service", "notebook", "static", "cli", "library", "script", "unknown"],
   apps: ["one", "several"],
-  database: ["postgres", "mysql", "sqlite", "mongo", "none"],
+  database: ["postgres", "mysql", "sqlite", "mongo", "d1", "none"],
   container: ["dockerfile", "compose", "none"],
   orchestration: ["kubernetes", "helm", "terraform", "none"],
   jobs: [
@@ -39,7 +42,8 @@ const VOCABULARY: Record<string, string[]> = {
   serverless_fit: ["fits", "blocked"],
   blocked_by: [
     "background_work", "held_connections", "heavy_runtime", "model_runtime",
-    "local_disk", "no_free_tier_runtime", "prebuilt_image", "none",
+    "local_disk", "no_free_tier_runtime", "prebuilt_image", "server_executed",
+    "none",
   ],
   commercial: ["yes", "unclear"],
   assets: ["light", "heavy"],

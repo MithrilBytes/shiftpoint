@@ -15,7 +15,20 @@ const DRIZZLE_CONFIG = /(^|\/)drizzle\.config\.[cm]?[jt]s$/;
 const ENV_EXAMPLE = /(^|\/)\.env(\.example|\.sample|\.template)?$/;
 const PYTHON_SOURCE = /\.py$/;
 const ELIXIR_SOURCE = /\.exs?$/;
+const PHP_SOURCE = /\.php$/;
 const SPRING_CONFIG = /(^|\/)application(-[^/]+)?\.(properties|ya?ml)$/;
+const WRANGLER_CONFIG = /(^|\/)wrangler\.(toml|jsonc?)$/;
+
+// PHP with no framework names its database in the connection call and nowhere
+// else: the driver is a PHP extension rather than a composer package, and there
+// is frequently no composer.json to look in. A PDO DSN starts with the driver,
+// and the two older APIs are named after the database they talk to.
+const PHP_CONNECTION = /new\s+PDO\s*\(\s*["']([a-z0-9]+):|\b(mysqli_connect|new\s+mysqli|pg_connect)\s*\(/gi;
+
+// Cloudflare declares what a Worker is wired to in wrangler.toml. A D1 binding
+// is a SQL database the platform runs and backs up, not a file on a disk this
+// application has to keep, which is the distinction the whole ladder turns on.
+const D1_BINDING = /\[\[\s*d1_databases\s*\]\]|["']d1_databases["']\s*:/;
 
 // Laravel names its connection in .env and nowhere a dependency list can show
 // it: the driver is a PHP extension, not a composer package.
@@ -82,11 +95,25 @@ export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["mongodb-driver-sync", "mongo"],
   ["sqlite-jdbc", "sqlite"],
   // PHP. The driver is a PHP extension, and a composer.json that requires one
-  // is naming the database.
+  // is naming the database. pgsql is what PDO calls Postgres, in a DSN and in
+  // an extension name alike.
   ["ext-pdo_pgsql", "postgres"],
   ["ext-pdo_mysql", "mysql"],
   ["ext-pdo_sqlite", "sqlite"],
   ["ext-mongodb", "mongo"],
+  ["pgsql", "postgres"],
+  // .NET. A csproj names the provider package, and the provider is the
+  // database. SQL Server has no place on this ladder, so it is not listed:
+  // reading it as something it is not would be worse than not reading it.
+  ["npgsql", "postgres"],
+  ["npgsql.entityframeworkcore.postgresql", "postgres"],
+  ["mysqlconnector", "mysql"],
+  ["mysql.data", "mysql"],
+  ["pomelo.entityframeworkcore.mysql", "mysql"],
+  ["microsoft.entityframeworkcore.sqlite", "sqlite"],
+  ["microsoft.data.sqlite", "sqlite"],
+  ["system.data.sqlite", "sqlite"],
+  ["mongodb.driver", "mongo"],
 ]);
 
 // Scanning source files is the expensive path, so it is bounded.
@@ -170,6 +197,25 @@ export function detectDatabase(repo: Repo): Signal[] {
       if (adapter === "tds") continue;
       const engine = adapter === "postgres" ? "postgres" : adapter === "myxql" ? "mysql" : "sqlite";
       note(engine, `${file} sets the Ecto ${match[1]} adapter`);
+    }
+  }
+
+  for (const file of repo.matching(PHP_SOURCE).slice(0, MAX_SOURCE_FILES_SCANNED)) {
+    const text = repo.read(file) ?? "";
+    for (const match of text.matchAll(PHP_CONNECTION)) {
+      const dsn = (match[1] ?? "").toLowerCase();
+      if (dsn !== "") {
+        note(ENGINE_BY_ALIAS.get(dsn), `${file} opens a ${dsn} PDO connection`);
+        continue;
+      }
+      const call = (match[2] ?? "").toLowerCase();
+      note(call.includes("pg_") ? "postgres" : "mysql", `${file} calls ${match[2]}`);
+    }
+  }
+
+  for (const file of repo.matching(WRANGLER_CONFIG)) {
+    if (D1_BINDING.test(repo.read(file) ?? "")) {
+      note("d1", `${file} binds a D1 database to this Worker`);
     }
   }
 

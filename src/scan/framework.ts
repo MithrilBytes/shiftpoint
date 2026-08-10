@@ -4,6 +4,8 @@ import {
   cargoDependencies,
   cargoFiles,
   composerFiles,
+  denoManifestFiles,
+  dotnetProjectFiles,
   gemfiles,
   goDependencies,
   goModFiles,
@@ -138,6 +140,9 @@ export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
   ["nuxt", "nuxt"],
   ["@sveltejs/kit", "sveltekit"],
   ["@remix-run/node", "remix"],
+  // Deno. Fresh renders on the server on every request, so it is the same kind
+  // of thing as Nuxt or SvelteKit rather than a generator that writes files.
+  ["fresh", "fresh"],
   // Python
   ["flask", "flask"],
   ["django", "django"],
@@ -173,6 +178,27 @@ export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
   ["spring-boot-starter-web", "spring-boot"],
   ["spring-boot-starter-webflux", "spring-boot"],
   ["ktor-server-core", "ktor"],
+  // Spring is not the only way to write a JVM service. Each of these puts an
+  // HTTP server in the process the same way spring-boot-starter-web does.
+  // Quarkus spells that several ways depending on the version and the codec,
+  // so each spelling is listed rather than matched by prefix: quarkus-rest-
+  // client is a client, and a prefix would have called it a server.
+  ["quarkus-rest", "quarkus"],
+  ["quarkus-rest-jackson", "quarkus"],
+  ["quarkus-resteasy", "quarkus"],
+  ["quarkus-resteasy-jackson", "quarkus"],
+  ["quarkus-resteasy-reactive", "quarkus"],
+  ["quarkus-resteasy-reactive-jackson", "quarkus"],
+  ["quarkus-vertx-http", "quarkus"],
+  ["quarkus-undertow", "quarkus"],
+  ["micronaut-http-server-netty", "micronaut"],
+  ["helidon-webserver", "helidon"],
+  ["javalin", "javalin"],
+  // .NET states this in the SDK rather than in a package. Microsoft.NET.Sdk.Web
+  // is the SDK that builds an application which listens; the plain SDK builds a
+  // console program, and nothing else in a csproj tells the two apart.
+  ["microsoft.net.sdk.web", "aspnet"],
+  ["microsoft.aspnetcore.app", "aspnet"],
 ]);
 
 /**
@@ -227,6 +253,14 @@ export function detectFramework(repo: Repo): Signal[] {
   if (jvmBuildFiles(repo).length > 0) {
     languages.push("java");
     languageEvidence.push(jvmBuildFiles(repo)[0] ?? "a JVM build file");
+  }
+  if (dotnetProjectFiles(repo).length > 0) {
+    languages.push("dotnet");
+    languageEvidence.push(dotnetProjectFiles(repo)[0] ?? "a .NET project file");
+  }
+  if (denoManifestFiles(repo).length > 0) {
+    languages.push("deno");
+    languageEvidence.push(denoManifestFiles(repo)[0] ?? "deno.json");
   }
 
   // A manifest is the strongest evidence, but plenty of real projects are a

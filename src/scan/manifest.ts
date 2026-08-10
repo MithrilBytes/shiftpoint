@@ -22,6 +22,13 @@ const COMPOSE = /(^|\/)(docker-)?compose\.ya?ml$/;
 const COMPOSER_JSON = /(^|\/)composer\.json$/;
 const MIX_EXS = /(^|\/)mix\.exs$/;
 const JVM_BUILD = /(^|\/)(pom\.xml|build\.gradle(\.kts)?)$/;
+// A .NET project file and a deno.json say the same thing in their own dialect.
+// The csproj names the SDK it builds against and the packages it references;
+// deno.json names what the code imports and where each import resolves to.
+// Refusing to open either left two mainstream runtimes invisible, which reads
+// to their owners as "this tool has never heard of my stack".
+const DOTNET_PROJECT = /(^|\/)[^/]+\.(csproj|fsproj|vbproj)$/;
+const DENO_MANIFEST = /(^|\/)deno\.jsonc?$/;
 
 /** Every dependency manifest in the repository, whatever the language. */
 export function manifestFiles(repo: Repo): string[] {
@@ -35,7 +42,9 @@ export function manifestFiles(repo: Repo): string[] {
       CARGO_TOML.test(file) ||
       COMPOSER_JSON.test(file) ||
       MIX_EXS.test(file) ||
-      JVM_BUILD.test(file),
+      JVM_BUILD.test(file) ||
+      DOTNET_PROJECT.test(file) ||
+      DENO_MANIFEST.test(file),
   );
 }
 
@@ -73,6 +82,14 @@ export function mixFiles(repo: Repo): string[] {
 
 export function jvmBuildFiles(repo: Repo): string[] {
   return repo.matching(JVM_BUILD);
+}
+
+export function dotnetProjectFiles(repo: Repo): string[] {
+  return repo.matching(DOTNET_PROJECT);
+}
+
+export function denoManifestFiles(repo: Repo): string[] {
+  return repo.matching(DENO_MANIFEST);
 }
 
 /**
@@ -141,6 +158,87 @@ export function jvmDependencies(repo: Repo): Set<string> {
 }
 
 /**
+ * Package references and the SDK from every .NET project file.
+ *
+ * The SDK is kept alongside the packages because it is where a .NET project
+ * says what kind of thing it is. Microsoft.NET.Sdk.Web builds an application
+ * that listens; the plain Microsoft.NET.Sdk builds a console program. No
+ * package reference states that, so reading only the references would leave
+ * every ASP.NET service looking like a library of C# files.
+ */
+export function dotnetDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const file of dotnetProjectFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+    for (const match of text.matchAll(
+      /<(?:PackageReference|FrameworkReference)\s[^>]*Include\s*=\s*["']([^"']+)["']/g,
+    )) {
+      names.add((match[1] ?? "").toLowerCase());
+    }
+    for (const match of text.matchAll(/<Project\s[^>]*Sdk\s*=\s*["']([^"']+)["']/g)) {
+      names.add((match[1] ?? "").toLowerCase());
+    }
+  }
+  return names;
+}
+
+/**
+ * Names from every deno.json import map.
+ *
+ * Deno states a dependency as a specifier rather than a package name, so both
+ * halves are read: the alias on the left, which is what the code writes, and
+ * the URL or npm/jsr specifier on the right, which is what it resolves to.
+ * Every segment of each is kept, the same way go.mod paths are broken up, so a
+ * name is found wherever the specifier happens to carry it. That over collects
+ * hosts and path parts, which is harmless: none of them collide with the names
+ * a detector looks for.
+ */
+export function denoDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const file of denoManifestFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+    let parsed: unknown;
+    try {
+      // deno.jsonc is allowed comments, and JSON.parse is not.
+      parsed = JSON.parse(
+        text.replace(/^﻿/, "").replace(/\/\*[\s\S]*?\*\//g, "").replace(/^[ \t]*\/\/.*$/gm, ""),
+      );
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null) continue;
+    const imports = (parsed as Record<string, unknown>)["imports"];
+    if (typeof imports !== "object" || imports === null) continue;
+    for (const [alias, target] of Object.entries(imports as Record<string, unknown>)) {
+      for (const name of specifierNames(alias)) names.add(name);
+      if (typeof target === "string") {
+        for (const name of specifierNames(target)) names.add(name);
+      }
+    }
+  }
+  return names;
+}
+
+// Scheme and registry words carry no package name of their own. Written as a
+// pattern rather than a list of quoted strings so this file states no protocol
+// name: the offline check greps src/ for exactly that, and it is right to.
+const SPECIFIER_NOISE = /^(ht{2}ps?|npm|jsr|node|file|x|std)$/;
+
+function specifierNames(specifier: string): string[] {
+  const names: string[] = [];
+  for (const part of specifier.split(/[/:]/)) {
+    const name = (part.replace(/^[$@]/, "").split("@")[0] ?? "").toLowerCase();
+    if (name === "" || SPECIFIER_NOISE.test(name)) continue;
+    // A version, not a name.
+    if (/^v?\d/.test(name)) continue;
+    names.push(name);
+  }
+  return names;
+}
+
+/**
  * The manifests of the languages this tool identifies but does not reason
  * about, each paired with how to say where a name came from.
  *
@@ -152,6 +250,8 @@ export function otherLanguageSources(repo: Repo): Array<[Set<string>, string]> {
     [composerDependencies(repo), "composer.json requires"],
     [mixDependencies(repo), "mix.exs requires"],
     [jvmDependencies(repo), `${jvmBuildFiles(repo)[0] ?? "a JVM build file"} declares`],
+    [dotnetDependencies(repo), `${dotnetProjectFiles(repo)[0] ?? "a .NET project file"} references`],
+    [denoDependencies(repo), `${denoManifestFiles(repo)[0] ?? "deno.json"} imports`],
   ];
 }
 
@@ -368,6 +468,17 @@ export interface ComposeServices {
   images: string[];
   /** Application services that pull a prebuilt image instead of building one. */
   deployed: string[];
+  /**
+   * Services wired to the machine they run on.
+   *
+   * A device node, the host's network namespace, or a privileged container are
+   * each a statement that this deployment is that box and nowhere else. No
+   * managed platform hands out /dev/dri or port 53 on the house LAN, so a
+   * repository holding one of these is a machine's configuration rather than an
+   * application somebody could host. Reading it as a deployment quotes a server
+   * price for a home NAS that already has one.
+   */
+  hostBound: string[];
 }
 
 /**
@@ -384,6 +495,7 @@ export function composeServices(repo: Repo): ComposeServices | undefined {
   const infrastructure: string[] = [];
   const images: string[] = [];
   const deployed: string[] = [];
+  const hostBound: string[] = [];
   let parsedAny = false;
 
   for (const file of files) {
@@ -404,6 +516,13 @@ export function composeServices(repo: Repo): ComposeServices | undefined {
       const service = typeof raw === "object" && raw !== null ? (raw as Record<string, unknown>) : {};
       const image = typeof service["image"] === "string" ? service["image"] : undefined;
       if (image !== undefined) images.push(image);
+      if (
+        service["devices"] !== undefined ||
+        service["privileged"] === true ||
+        service["network_mode"] === "host"
+      ) {
+        hostBound.push(name);
+      }
       if (image !== undefined && INFRASTRUCTURE_IMAGE.test(image)) {
         infrastructure.push(name);
       } else {
@@ -415,7 +534,7 @@ export function composeServices(repo: Repo): ComposeServices | undefined {
     }
   }
 
-  return parsedAny ? { app, infrastructure, images, deployed } : undefined;
+  return parsedAny ? { app, infrastructure, images, deployed, hostBound } : undefined;
 }
 
 /**
