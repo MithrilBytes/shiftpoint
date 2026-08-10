@@ -1,0 +1,91 @@
+id: r2infra-tiny-express-app-helm-chart
+origin: "A twenty line Express service that answers which days are company holidays. The list is a constant in the source. It carries a chart straight out of `helm create`, with the scaffolded values file barely edited."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [helm-without-demand]
+files:
+  package.json: |
+    {
+      "name": "holiday-calendar",
+      "private": true,
+      "scripts": { "start": "node src/server.js" },
+      "dependencies": { "express": "^4.19.2" }
+    }
+  src/server.js: |
+    const express = require("express");
+
+    const HOLIDAYS = {
+      "2025": ["2025-01-01", "2025-04-18", "2025-12-25", "2025-12-26"],
+      "2026": ["2026-01-01", "2026-04-03", "2026-12-25", "2026-12-28"]
+    };
+
+    const app = express();
+    app.get("/holidays/:year", (req, res) => res.json(HOLIDAYS[req.params.year] || []));
+    app.get("/healthz", (_req, res) => res.send("ok"));
+    app.listen(process.env.PORT || 3000);
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/server.js"]
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: holiday-calendar
+    description: A Helm chart for Kubernetes
+    type: application
+    version: 0.1.0
+    appVersion: "1.0.0"
+  chart/values.yaml: |
+    replicaCount: 1
+
+    image:
+      repository: ghcr.io/acme/holiday-calendar
+      pullPolicy: IfNotPresent
+      tag: ""
+
+    service:
+      type: ClusterIP
+      port: 80
+
+    ingress:
+      enabled: false
+
+    resources: {}
+
+    autoscaling:
+      enabled: false
+  chart/templates/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: {{ .Release.Name }}
+    spec:
+      replicas: {{ .Values.replicaCount }}
+      selector:
+        matchLabels:
+          app.kubernetes.io/name: {{ .Chart.Name }}
+      template:
+        metadata:
+          labels:
+            app.kubernetes.io/name: {{ .Chart.Name }}
+        spec:
+          containers:
+            - name: {{ .Chart.Name }}
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              imagePullPolicy: {{ .Values.image.pullPolicy }}
+              ports:
+                - containerPort: 3000
+  chart/templates/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: {{ .Release.Name }}
+    spec:
+      type: {{ .Values.service.type }}
+      selector:
+        app.kubernetes.io/name: {{ .Chart.Name }}
+      ports:
+        - port: {{ .Values.service.port }}
+          targetPort: 3000

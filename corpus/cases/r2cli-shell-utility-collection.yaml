@@ -1,0 +1,60 @@
+id: r2cli-shell-utility-collection
+origin: "A small collection of POSIX shell utilities that a developer installs onto their own PATH with make install, complete with zsh completions and a shellcheck job. Unlike a dotfiles repository these are programs with arguments and a manual, but they still run on a laptop and exit."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  Makefile: |
+    PREFIX ?= /usr/local
+
+    install:
+    	install -d $(PREFIX)/bin $(PREFIX)/share/zsh/site-functions
+    	install -m 0755 bin/git-recent bin/todos $(PREFIX)/bin
+    	install -m 0644 completions/_git-recent $(PREFIX)/share/zsh/site-functions
+
+    uninstall:
+    	rm -f $(PREFIX)/bin/git-recent $(PREFIX)/bin/todos
+
+    lint:
+    	shellcheck bin/*
+  bin/git-recent: |
+    #!/usr/bin/env sh
+    # List branches by the date of their last commit, newest first.
+    set -eu
+
+    limit="${1:-15}"
+    git for-each-ref --sort=-committerdate refs/heads/ \
+      --format='%(committerdate:relative)|%(refname:short)|%(authorname)' \
+      | head -n "$limit" \
+      | column -t -s '|'
+  bin/todos: |
+    #!/usr/bin/env sh
+    # Print every TODO and FIXME under the current tree with its author.
+    set -eu
+
+    pattern="${1:-TODO|FIXME}"
+    git grep -nE "$pattern" -- . ':!vendor' | while IFS=: read -r file line _; do
+      who=$(git blame -L "$line","$line" --porcelain -- "$file" | sed -n 's/^author //p')
+      printf '%s:%s\t%s\n' "$file" "$line" "$who"
+    done
+  completions/_git-recent: |
+    #compdef git-recent
+    _arguments '1:number of branches:'
+  .github/workflows/shellcheck.yml: |
+    name: lint
+    on: [push, pull_request]
+    jobs:
+      shellcheck:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: make lint
+  README.md: |
+    # shtools
+
+    Two small shell programs. `make install` puts them on your PATH.
+
+    ```
+    git-recent 5
+    todos 'FIXME'
+    ```

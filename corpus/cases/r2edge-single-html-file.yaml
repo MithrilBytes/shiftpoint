@@ -1,0 +1,28 @@
+id: r2edge-single-html-file
+origin: "One HTML file with its CSS and JavaScript inline, served from GitHub Pages: an oven temperature converter somebody wrote in an afternoon and links to from a recipe blog. The repository contains nothing else, and there is nothing to build."
+expect:
+  stage: static-site
+  flags: []
+files:
+  index.html: |
+    <!doctype html>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>Oven temperatures</title>
+    <style>
+      body { font: 16px/1.5 system-ui, sans-serif; max-width: 30rem; margin: 4rem auto; }
+      input { font-size: 1.5rem; width: 6rem; }
+    </style>
+    <h1>Oven temperatures</h1>
+    <p><input id="c" type="number" value="180"> C is <b id="f"></b> F,
+       gas mark <b id="g"></b>.</p>
+    <script>
+      const marks = [135, 149, 163, 177, 191, 204, 218, 232, 246];
+      function update() {
+        const c = Number(document.getElementById("c").value);
+        document.getElementById("f").textContent = Math.round((c * 9) / 5 + 32);
+        document.getElementById("g").textContent = marks.findIndex((m) => c <= m) + 1 || 9;
+      }
+      document.getElementById("c").addEventListener("input", update);
+      update();
+    </script>

@@ -1,0 +1,106 @@
+id: r2infra-ansible-fleet-playbooks
+origin: "The playbooks a two person operations team runs against machines it already owns. An inventory of named hosts, a baseline role, an nginx role, a template. Nothing here is built, published or served: it is run from a laptop with `ansible-playbook site.yml` and it configures hardware that already exists."
+expect:
+  stage: unknown
+  flags: []
+files:
+  ansible.cfg: |
+    [defaults]
+    inventory = inventory/production.ini
+    roles_path = roles
+    host_key_checking = False
+    retry_files_enabled = False
+
+    [privilege_escalation]
+    become = True
+    become_method = sudo
+  inventory/production.ini: |
+    [web]
+    web01.acme.internal
+    web02.acme.internal
+    web03.acme.internal
+
+    [db]
+    db01.acme.internal
+
+    [all:vars]
+    ansible_user=deploy
+    ansible_python_interpreter=/usr/bin/python3
+  site.yml: |
+    - name: Baseline every host
+      hosts: all
+      roles:
+        - baseline
+
+    - name: Web tier
+      hosts: web
+      roles:
+        - nginx
+
+    - name: Database host
+      hosts: db
+      roles:
+        - postgres
+  roles/baseline/tasks/main.yml: |
+    - name: Install base packages
+      ansible.builtin.apt:
+        name:
+          - chrony
+          - ufw
+          - unattended-upgrades
+        state: present
+        update_cache: true
+
+    - name: Allow ssh
+      community.general.ufw:
+        rule: allow
+        port: "22"
+        proto: tcp
+
+    - name: Deny everything else inbound
+      community.general.ufw:
+        state: enabled
+        policy: deny
+        direction: incoming
+  roles/nginx/tasks/main.yml: |
+    - name: Install nginx
+      ansible.builtin.apt:
+        name: nginx
+        state: present
+
+    - name: Write the site config
+      ansible.builtin.template:
+        src: site.conf.j2
+        dest: /etc/nginx/sites-enabled/default
+        mode: "0644"
+      notify: reload nginx
+
+    - name: Ensure nginx is running
+      ansible.builtin.service:
+        name: nginx
+        state: started
+        enabled: true
+  roles/nginx/templates/site.conf.j2: |
+    upstream app {
+    {% for host in groups['web'] %}
+        server {{ host }}:8080;
+    {% endfor %}
+    }
+
+    server {
+        listen 80;
+        server_name {{ site_name }};
+
+        location / {
+            proxy_pass http://app;
+        }
+    }
+  README.md: |
+    # ops
+
+    Run against the fleet:
+
+        ansible-playbook site.yml --limit web
+
+    Hosts are racked in the Slough cage. Adding a machine means adding it to
+    the inventory and rerunning the baseline play.

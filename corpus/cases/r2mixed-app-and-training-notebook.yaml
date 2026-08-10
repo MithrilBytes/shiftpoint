@@ -1,0 +1,76 @@
+id: r2mixed-app-and-training-notebook
+origin: >-
+  A support ticket triage service and the notebook that produced it. The
+  notebook fine tunes a DistilBERT checkpoint and writes it to `models/`; the
+  FastAPI service loads that checkpoint into memory at startup and classifies
+  tickets against it. Two things in one repository, and the one that gets
+  deployed is sized by the weights it holds, not by how many tickets arrive.
+expect:
+  stage: model-runtime
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn==0.30.1
+    torch==2.3.1
+    transformers==4.42.3
+    datasets==2.20.0
+  service/app.py: |
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+    from transformers import AutoModelForSequenceClassification, AutoTokenizer
+    import torch
+
+    MODEL_DIR = "models/triage-distilbert"
+
+    tokenizer = AutoTokenizer.from_pretrained(MODEL_DIR)
+    model = AutoModelForSequenceClassification.from_pretrained(MODEL_DIR)
+    model.eval()
+
+    app = FastAPI()
+
+    class Ticket(BaseModel):
+        subject: str
+        body: str
+
+    @app.post("/triage")
+    def triage(ticket: Ticket):
+        batch = tokenizer(ticket.subject + "\n" + ticket.body, truncation=True, return_tensors="pt")
+        with torch.no_grad():
+            logits = model(**batch).logits
+        return {"queue": model.config.id2label[int(logits.argmax())]}
+  notebooks/finetune.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": ["from transformers import AutoModelForSequenceClassification, Trainer, TrainingArguments\n", "model = AutoModelForSequenceClassification.from_pretrained('distilbert-base-uncased', num_labels=6)\n", "Trainer(model=model, args=TrainingArguments('out', num_train_epochs=3), train_dataset=train).train()\n", "model.save_pretrained('../models/triage-distilbert')"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  models/README.md: |
+    Not checked in. `make pull-model` fetches the current checkpoint from
+    s3://acme-models/triage/ into this directory. It is about 260 MB on disk
+    and the service will not start without it.
+  Makefile: |
+    .PHONY: pull-model serve
+
+    pull-model:
+    	aws s3 sync s3://acme-models/triage/ models/triage-distilbert/
+
+    serve:
+    	uvicorn service.app:app --host 0.0.0.0 --port 8000
+  README.md: |
+    # triage
+
+    `notebooks/finetune.ipynb` is run by hand every few months when we have
+    enough newly labelled tickets. `service/` is what runs all the time: it
+    loads the checkpoint once at startup and holds it in memory for every
+    request. Traffic is a few hundred tickets an hour, so the box is sized by
+    the model rather than by load.

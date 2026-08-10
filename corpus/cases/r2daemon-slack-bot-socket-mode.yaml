@@ -1,0 +1,55 @@
+id: r2daemon-slack-bot-socket-mode
+origin: "An on call helper for a Slack workspace, written with Bolt in socket mode. Socket mode means Slack never posts to a URL: the app dials out over a websocket and holds it open, so there is no request to answer and no function tier that can host it. The rota is a checked in JSON file."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "oncall-helper",
+      "private": true,
+      "scripts": { "start": "node app.js" },
+      "dependencies": {
+        "@slack/bolt": "^3.19.0"
+      }
+    }
+  app.js: |
+    const { App } = require("@slack/bolt");
+    const { whoIsOn, nextHandover } = require("./rota");
+
+    const app = new App({
+      token: process.env.SLACK_BOT_TOKEN,
+      appToken: process.env.SLACK_APP_TOKEN,
+      socketMode: true,
+    });
+
+    app.command("/oncall", async ({ ack, respond }) => {
+      await ack();
+      await respond(`${whoIsOn()} until ${nextHandover()}`);
+    });
+
+    app.event("app_mention", async ({ event, say }) => {
+      await say(`<@${event.user}> ping ${whoIsOn()}, they have the pager.`);
+    });
+
+    (async () => {
+      await app.start();
+      console.log("socket mode connection open");
+    })();
+  rota.js: |
+    const weeks = require("./rota.json");
+
+    const index = () => Math.floor(Date.now() / 604800000) % weeks.length;
+
+    exports.whoIsOn = () => weeks[index()];
+    exports.nextHandover = () => new Date((Math.floor(Date.now() / 604800000) + 1) * 604800000).toDateString();
+  rota.json: |
+    ["priya", "marcus", "ines", "tom"]
+  .env.example: |
+    SLACK_BOT_TOKEN=xoxb-
+    SLACK_APP_TOKEN=xapp-
+  README.md: |
+    # oncall-helper
+
+    `npm start`. There is no HTTP listener at all; the websocket to Slack is
+    the whole interface, and it has to stay connected.

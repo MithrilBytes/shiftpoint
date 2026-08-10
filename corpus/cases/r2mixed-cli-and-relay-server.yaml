@@ -1,0 +1,100 @@
+id: r2mixed-cli-and-relay-server
+origin: >-
+  A terminal sharing tool in the shape that tmate and sshx take: `cmd/share` is
+  the binary users install and run on their own machine, and `relay/` is the
+  websocket server in the middle that both ends connect to. The relay keeps its
+  sessions in a map in process memory, holds every connection open for the life
+  of the session, and has no database of any kind.
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/hollow/termshare
+
+    go 1.22
+
+    require (
+    	github.com/coder/websocket v1.8.12
+    	github.com/creack/pty v1.1.21
+    )
+  cmd/share/main.go: |
+    package main
+
+    import (
+    	"context"
+    	"fmt"
+    	"os"
+    	"os/exec"
+
+    	"github.com/coder/websocket"
+    	"github.com/creack/pty"
+    )
+
+    func main() {
+    	relay := os.Getenv("TERMSHARE_RELAY")
+    	conn, _, err := websocket.Dial(context.Background(), relay+"/host", nil)
+    	if err != nil {
+    		fmt.Fprintln(os.Stderr, "cannot reach relay:", err)
+    		os.Exit(1)
+    	}
+    	tty, _ := pty.Start(exec.Command(os.Getenv("SHELL")))
+    	pump(conn, tty)
+    }
+  relay/main.go: |
+    package main
+
+    import (
+    	"net/http"
+    	"sync"
+
+    	"github.com/coder/websocket"
+    )
+
+    type session struct {
+    	host    *websocket.Conn
+    	viewers []*websocket.Conn
+    }
+
+    var (
+    	mu       sync.Mutex
+    	sessions = map[string]*session{}
+    )
+
+    func main() {
+    	http.HandleFunc("/host", hostHandler)
+    	http.HandleFunc("/view/", viewHandler)
+    	http.ListenAndServe(":8080", nil)
+    }
+  relay/hub.go: |
+    package main
+
+    import "github.com/coder/websocket"
+
+    func attach(id string, viewer *websocket.Conn) bool {
+    	mu.Lock()
+    	defer mu.Unlock()
+    	s, ok := sessions[id]
+    	if !ok {
+    		return false
+    	}
+    	s.viewers = append(s.viewers, viewer)
+    	return true
+    }
+  relay/Dockerfile: |
+    FROM golang:1.22-alpine AS build
+    WORKDIR /src
+    COPY . .
+    RUN go build -o /relay ./relay
+
+    FROM alpine:3.20
+    COPY --from=build /relay /relay
+    CMD ["/relay"]
+  README.md: |
+    # termshare
+
+    `go install github.com/hollow/termshare/cmd/share@latest` gives you the
+    client. The relay is the part somebody has to run: we keep ours on a small
+    VPS. Sessions live in the relay's memory and are gone if it restarts, which
+    is fine because a session is a conversation, not a record. Nothing is
+    written to disk and there is no database.

@@ -1,0 +1,57 @@
+id: r2data-marine-survey-notebooks
+origin: "A field ecology analysis: two notebooks, a CSV of counts, and a figure that goes in a paper. It is run on the analyst's laptop, produces a plot and a table, and is finished. There is no service, no scheduled job and nothing that anyone would deploy."
+expect:
+  stage: notebook
+  flags: []
+files:
+  requirements.txt: |
+    pandas==2.2.2
+    matplotlib==3.9.1
+    statsmodels==0.14.2
+    jupyterlab==4.2.4
+  notebooks/01-clean-counts.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 3,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import pandas as pd\n", "counts = pd.read_csv('../data/haulout-counts.csv', parse_dates=['surveyed_on'])\n", "counts = counts[counts['tide_state'] == 'low']\n", "counts.to_parquet('../data/clean.parquet')"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  notebooks/02-trend.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 7,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import pandas as pd\n", "import statsmodels.formula.api as smf\n", "clean = pd.read_parquet('../data/clean.parquet')\n", "fit = smf.poisson('seals ~ year + C(site)', data=clean).fit()\n", "print(fit.summary())"]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": ["Counts at Ramsey fall about 4 percent a year; Skomer is flat."]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  data/haulout-counts.csv: |
+    site,surveyed_on,tide_state,seals,year
+    Ramsey,2019-06-14,low,212,2019
+    Ramsey,2020-06-11,low,198,2020
+    Skomer,2020-06-12,high,64,2020
+  README.md: |
+    # grey-seal-haulouts
+
+    Counts from the summer haul out surveys, 2015 to 2024. Run the notebooks in
+    order; `02-trend.ipynb` makes figure 3 of the paper. Nothing here runs
+    anywhere except a laptop.

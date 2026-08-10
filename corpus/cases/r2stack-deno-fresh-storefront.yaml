@@ -1,0 +1,114 @@
+id: r2stack-deno-fresh-storefront
+origin: >-
+  A Deno Fresh storefront for a coffee roaster. Every page is rendered on the
+  server from the Shopify Storefront API at request time, and checkout is
+  handed off to Shopify, so the shop keeps no database and no session store of
+  its own. It is a stateless server rendered app, and it is a shop taking
+  money, which is not what a free hobby plan is for.
+expect:
+  stage: commercial-app-on-managed-hosting
+  flags: []
+files:
+  deno.json: |
+    {
+      "tasks": {
+        "start": "deno run -A --watch=static/,routes/ dev.ts",
+        "build": "deno run -A dev.ts build",
+        "preview": "deno run -A main.ts"
+      },
+      "imports": {
+        "$fresh/": "https://deno.land/x/fresh@1.6.8/",
+        "preact": "https://esm.sh/preact@10.22.0",
+        "preact/": "https://esm.sh/preact@10.22.0/"
+      },
+      "compilerOptions": { "jsx": "react-jsx", "jsxImportSource": "preact" }
+    }
+  main.ts: |
+    import { start } from "$fresh/server.ts";
+    import manifest from "./fresh.gen.ts";
+
+    await start(manifest);
+  lib/shopify.ts: |
+    const domain = Deno.env.get("SHOPIFY_STORE_DOMAIN")!;
+    const token = Deno.env.get("SHOPIFY_STOREFRONT_TOKEN")!;
+
+    export async function storefront<T>(query: string, variables = {}): Promise<T> {
+      const res = await fetch(`https://${domain}/api/2024-07/graphql.json`, {
+        method: "POST",
+        headers: {
+          "content-type": "application/json",
+          "X-Shopify-Storefront-Access-Token": token,
+        },
+        body: JSON.stringify({ query, variables }),
+      });
+      if (!res.ok) throw new Error(`storefront ${res.status}`);
+      const { data } = await res.json();
+      return data as T;
+    }
+  routes/index.tsx: |
+    import { Handlers, PageProps } from "$fresh/server.ts";
+    import { storefront } from "../lib/shopify.ts";
+
+    const QUERY = `{
+      products(first: 24, sortKey: BEST_SELLING) {
+        nodes { handle title priceRange { minVariantPrice { amount currencyCode } } }
+      }
+    }`;
+
+    export const handler: Handlers = {
+      async GET(_req, ctx) {
+        const data = await storefront<{ products: { nodes: unknown[] } }>(QUERY);
+        return ctx.render(data.products.nodes);
+      },
+    };
+
+    export default function Home({ data }: PageProps<any[]>) {
+      return (
+        <main>
+          <h1>Northmoor Coffee</h1>
+          <ul>
+            {data.map((p) => (
+              <li>
+                <a href={`/products/${p.handle}`}>{p.title}</a>
+                <span>{p.priceRange.minVariantPrice.amount}</span>
+              </li>
+            ))}
+          </ul>
+        </main>
+      );
+    }
+  "routes/products/[handle].tsx": |
+    import { Handlers, PageProps } from "$fresh/server.ts";
+    import { storefront } from "../../lib/shopify.ts";
+
+    export const handler: Handlers = {
+      async GET(_req, ctx) {
+        const data = await storefront<{ product: unknown }>(
+          `query ($handle: String!) {
+             product(handle: $handle) { title descriptionHtml onlineStoreUrl }
+           }`,
+          { handle: ctx.params.handle },
+        );
+        if (!data.product) return ctx.renderNotFound();
+        return ctx.render(data.product);
+      },
+    };
+
+    export default function Product({ data }: PageProps<any>) {
+      return (
+        <article>
+          <h1>{data.title}</h1>
+          <div dangerouslySetInnerHTML={{ __html: data.descriptionHtml }} />
+          <a href={data.onlineStoreUrl}>Buy</a>
+        </article>
+      );
+    }
+  .env.example: |
+    SHOPIFY_STORE_DOMAIN=northmoor-coffee.myshopify.com
+    SHOPIFY_STOREFRONT_TOKEN=
+  README.md: |
+    # northmoor-coffee
+
+    The Northmoor Coffee Roasters shop. Products, stock and prices are read
+    from Shopify on every request and checkout happens on Shopify, so there is
+    nothing here to back up.

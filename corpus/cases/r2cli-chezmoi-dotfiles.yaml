@@ -1,0 +1,60 @@
+id: r2cli-chezmoi-dotfiles
+origin: "A dotfiles repository managed by chezmoi: files named with the dot_ and run_once_ prefixes, a template that branches on the hostname, and an ignore list. The chezmoi binary is not in here; this is only the data it applies to a laptop. There is no program and nothing to run anywhere but the owner's own machines."
+expect:
+  stage: unknown
+  flags: []
+files:
+  dot_zshrc: |
+    export EDITOR=hx
+    export PATH="$HOME/.local/bin:$HOME/go/bin:$PATH"
+
+    setopt hist_ignore_all_dups share_history
+    alias k=kubectl
+    alias gco='git checkout'
+
+    eval "$(starship init zsh)"
+  dot_gitconfig.tmpl: |
+    [user]
+      name = {{ .name }}
+      email = {{ .email }}
+    [core]
+      pager = delta
+    {{- if eq .chezmoi.os "darwin" }}
+    [credential]
+      helper = osxkeychain
+    {{- end }}
+  private_dot_ssh/config.tmpl: |
+    Host *
+      AddKeysToAgent yes
+      ServerAliveInterval 60
+
+    Host build
+      HostName {{ .buildHost }}
+      User {{ .name }}
+  run_once_install-packages.sh.tmpl: |
+    #!/bin/sh
+    set -eu
+
+    {{ if eq .chezmoi.os "darwin" -}}
+    brew install starship helix delta fd ripgrep
+    {{- else -}}
+    sudo apt-get update && sudo apt-get install -y fd-find ripgrep
+    {{- end }}
+  .chezmoiignore: |
+    README.md
+    LICENSE
+    {{ if ne .chezmoi.os "darwin" }}
+    Library/**
+    {{ end }}
+  .chezmoidata.yaml: |
+    name: Priya Raman
+    email: priya@example.net
+    buildHost: build01.lan
+  README.md: |
+    # dotfiles
+
+    ```
+    chezmoi init --apply https://github.com/example/dotfiles.git
+    ```
+
+    Two laptops and one work desktop. Nothing else consumes this.

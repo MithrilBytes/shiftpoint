@@ -1,0 +1,51 @@
+id: r2data-pandas-etl-nightly
+origin: "A nightly extract: pull a published CSV over HTTPS, tidy it with pandas, write parquet to a bucket. It runs for well under a minute on a few megabytes, holds nothing open, listens on nothing, and is finished when the file lands. A scheduled function is exactly the right shape for it."
+expect:
+  stage: script-on-free-functions
+  flags: []
+files:
+  requirements.txt: |
+    pandas==2.2.2
+    pyarrow==17.0.0
+    requests==2.32.3
+    boto3==1.34.152
+  etl.py: |
+    import io
+    import os
+    from datetime import date
+
+    import boto3
+    import pandas as pd
+    import requests
+
+    SOURCE = "https://data.gov.uk/dataset/epc/certificates-daily.csv"
+
+    def main():
+        response = requests.get(SOURCE, timeout=60)
+        response.raise_for_status()
+        frame = pd.read_csv(io.BytesIO(response.content))
+        frame = frame.rename(columns=str.lower).dropna(subset=["uprn"])
+        frame["lodged_on"] = pd.to_datetime(frame["lodged_on"]).dt.date
+        buffer = io.BytesIO()
+        frame.to_parquet(buffer, index=False)
+        boto3.client("s3").put_object(
+            Bucket=os.environ["BUCKET"],
+            Key=f"epc/{date.today():%Y/%m/%d}.parquet",
+            Body=buffer.getvalue(),
+        )
+        print(f"wrote {len(frame)} rows")
+
+    def handler(event, context):
+        main()
+
+    if __name__ == "__main__":
+        main()
+  README.md: |
+    # epc-daily
+
+    Grabs yesterday's certificates feed and drops a parquet file in the lake so
+    the warehouse can copy it at 02:30.
+
+    The feed is about 12 MB and the whole run takes 35 to 50 seconds in around
+    400 MB of memory. Deployed as a scheduled job that fires at 02:00 and exits;
+    there is nothing to keep running in between.

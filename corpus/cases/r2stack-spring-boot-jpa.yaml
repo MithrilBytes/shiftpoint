@@ -1,0 +1,119 @@
+id: r2stack-spring-boot-jpa
+origin: >-
+  A Spring Boot 3 service for a haulage firm's vehicle fleet: web starter, JPA
+  starter, Postgres driver, entities with repositories, and a datasource URL
+  read from the environment. It is a long running JVM answering HTTP and a
+  managed Postgres behind it. Nothing is queued and nothing is scheduled.
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  pom.xml: |
+    <project xmlns="http://maven.apache.org/POM/4.0.0">
+      <modelVersion>4.0.0</modelVersion>
+      <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>3.3.2</version>
+      </parent>
+      <groupId>uk.co.ridgeway</groupId>
+      <artifactId>fleet</artifactId>
+      <version>1.4.0</version>
+      <properties>
+        <java.version>21</java.version>
+      </properties>
+      <dependencies>
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+          <groupId>org.springframework.boot</groupId>
+          <artifactId>spring-boot-starter-data-jpa</artifactId>
+        </dependency>
+        <dependency>
+          <groupId>org.postgresql</groupId>
+          <artifactId>postgresql</artifactId>
+          <scope>runtime</scope>
+        </dependency>
+      </dependencies>
+    </project>
+  src/main/resources/application.yml: |
+    spring:
+      datasource:
+        url: ${JDBC_URL:jdbc:postgresql://localhost:5432/fleet}
+        username: ${JDBC_USER:fleet}
+        password: ${JDBC_PASSWORD:}
+        hikari:
+          maximum-pool-size: 10
+      jpa:
+        hibernate:
+          ddl-auto: validate
+        open-in-view: false
+    server:
+      port: 8080
+  src/main/java/uk/co/ridgeway/fleet/Vehicle.java: |
+    package uk.co.ridgeway.fleet;
+
+    import jakarta.persistence.Entity;
+    import jakarta.persistence.GeneratedValue;
+    import jakarta.persistence.Id;
+    import java.time.LocalDate;
+
+    @Entity
+    public class Vehicle {
+        @Id
+        @GeneratedValue
+        private Long id;
+        private String registration;
+        private String depot;
+        private LocalDate motDue;
+
+        public Long getId() { return id; }
+        public String getRegistration() { return registration; }
+        public LocalDate getMotDue() { return motDue; }
+    }
+  src/main/java/uk/co/ridgeway/fleet/VehicleRepository.java: |
+    package uk.co.ridgeway.fleet;
+
+    import java.time.LocalDate;
+    import java.util.List;
+    import org.springframework.data.jpa.repository.JpaRepository;
+
+    public interface VehicleRepository extends JpaRepository<Vehicle, Long> {
+        List<Vehicle> findByDepot(String depot);
+
+        List<Vehicle> findByMotDueBefore(LocalDate cutoff);
+    }
+  src/main/java/uk/co/ridgeway/fleet/VehicleController.java: |
+    package uk.co.ridgeway.fleet;
+
+    import java.time.LocalDate;
+    import java.util.List;
+    import org.springframework.web.bind.annotation.GetMapping;
+    import org.springframework.web.bind.annotation.RequestParam;
+    import org.springframework.web.bind.annotation.RestController;
+
+    @RestController
+    public class VehicleController {
+        private final VehicleRepository vehicles;
+
+        VehicleController(VehicleRepository vehicles) {
+            this.vehicles = vehicles;
+        }
+
+        @GetMapping("/vehicles")
+        List<Vehicle> byDepot(@RequestParam String depot) {
+            return vehicles.findByDepot(depot);
+        }
+
+        @GetMapping("/vehicles/mot-due")
+        List<Vehicle> motDue() {
+            return vehicles.findByMotDueBefore(LocalDate.now().plusMonths(1));
+        }
+    }
+  README.md: |
+    # fleet
+
+    Vehicle records for Ridgeway Haulage. `./mvnw package` produces a jar; the
+    schema is managed by the DBA, so Hibernate is set to validate only.

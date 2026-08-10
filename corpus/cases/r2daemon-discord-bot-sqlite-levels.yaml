@@ -1,0 +1,78 @@
+id: r2daemon-discord-bot-sqlite-levels
+origin: "A discord.py levelling bot for one community server. It holds the gateway connection open for as long as it runs, and it keeps every member's XP in a SQLite file on the same disk as the process, so that disk has to survive a restart."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  requirements.txt: |
+    discord.py==2.4.0
+    aiosqlite==0.20.0
+    python-dotenv==1.0.1
+  bot.py: |
+    import os
+    import discord
+    from discord.ext import commands
+    from dotenv import load_dotenv
+    from levels import add_xp, level_of, setup_db
+
+    load_dotenv()
+    intents = discord.Intents.default()
+    intents.message_content = True
+    bot = commands.Bot(command_prefix="!", intents=intents)
+
+    @bot.event
+    async def on_ready():
+        await setup_db()
+
+    @bot.event
+    async def on_message(message):
+        if not message.author.bot:
+            await add_xp(message.author.id, 5)
+        await bot.process_commands(message)
+
+    @bot.command()
+    async def rank(ctx):
+        await ctx.send(f"{ctx.author.display_name}: level {await level_of(ctx.author.id)}")
+
+    bot.run(os.environ["DISCORD_TOKEN"])
+  levels.py: |
+    import aiosqlite
+
+    DB = "data/levels.db"
+
+    async def setup_db():
+        async with aiosqlite.connect(DB) as db:
+            await db.execute(
+                "CREATE TABLE IF NOT EXISTS xp (user_id INTEGER PRIMARY KEY, points INTEGER)"
+            )
+            await db.commit()
+
+    async def add_xp(user_id, points):
+        async with aiosqlite.connect(DB) as db:
+            await db.execute(
+                "INSERT INTO xp VALUES (?, ?) "
+                "ON CONFLICT(user_id) DO UPDATE SET points = points + ?",
+                (user_id, points, points),
+            )
+            await db.commit()
+
+    async def level_of(user_id):
+        async with aiosqlite.connect(DB) as db:
+            cursor = await db.execute("SELECT points FROM xp WHERE user_id = ?", (user_id,))
+            row = await cursor.fetchone()
+        return (row[0] if row else 0) // 100
+  Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY . .
+    VOLUME ["/app/data"]
+    CMD ["python", "bot.py"]
+  .env.example: |
+    DISCORD_TOKEN=
+  README.md: |
+    # levelbot
+
+    One process, one SQLite file under `data/`. Keep the volume attached
+    between deploys or everybody's rank resets to zero.

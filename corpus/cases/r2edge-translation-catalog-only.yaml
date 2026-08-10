@@ -1,0 +1,43 @@
+id: r2edge-translation-catalog-only
+origin: "The locale catalogue for a desktop application whose source lives in a different repository. Translators work in Crowdin, which opens pull requests here. The only thing that ever reads these files is a build somewhere else."
+expect:
+  stage: unknown
+  flags: []
+files:
+  README.md: |
+    # ledgerly-locales
+
+    Strings for Ledgerly. Do not edit `en.json` by hand: it is extracted from
+    the application repository on every release. Everything else arrives from
+    Crowdin. Merging here does nothing on its own; the app vendors this
+    directory at build time.
+  crowdin.yml: |
+    project_id: "482913"
+    preserve_hierarchy: true
+    files:
+      - source: /en.json
+        translation: /%two_letters_code%.json
+  en.json: |
+    {
+      "app.title": "Ledgerly",
+      "invoice.new": "New invoice",
+      "invoice.due": "Due {date}",
+      "settings.currency": "Currency"
+    }
+  de.json: |
+    {
+      "app.title": "Ledgerly",
+      "invoice.new": "Neue Rechnung",
+      "invoice.due": "Fällig am {date}",
+      "settings.currency": "Währung"
+    }
+  ja.json: |
+    {
+      "app.title": "Ledgerly",
+      "invoice.new": "新しい請求書",
+      "invoice.due": "期限 {date}",
+      "settings.currency": "通貨"
+    }
+  CODEOWNERS: |
+    /en.json @ledgerly/product
+    * @ledgerly/localisation

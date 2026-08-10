@@ -1,0 +1,116 @@
+id: r2infra-fastapi-postgres-k8s-and-helm
+origin: "A small FastAPI service holding the office asset register, forty users, backed by a managed Postgres. The repository carries hand written manifests from the first deploy and a Helm chart added later that renders very nearly the same objects. Nobody deleted either."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: [kubernetes-without-demand, helm-without-demand]
+files:
+  requirements.txt: |
+    fastapi==0.111.0
+    uvicorn[standard]==0.30.1
+    sqlalchemy==2.0.31
+    psycopg[binary]==3.2.1
+  main.py: |
+    import os
+
+    from fastapi import FastAPI
+    from sqlalchemy import create_engine, text
+
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+    app = FastAPI(title="asset register")
+
+    @app.get("/assets")
+    def assets():
+        with engine.connect() as conn:
+            rows = conn.execute(text("select id, tag, owner from assets order by tag"))
+            return [dict(row._mapping) for row in rows]
+
+    @app.get("/assets/{tag}")
+    def asset(tag: str):
+        with engine.connect() as conn:
+            row = conn.execute(
+                text("select id, tag, owner from assets where tag = :t"), {"t": tag}
+            ).first()
+            return dict(row._mapping) if row else {}
+  k8s/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: asset-register
+    spec:
+      replicas: 2
+      selector:
+        matchLabels:
+          app: asset-register
+      template:
+        metadata:
+          labels:
+            app: asset-register
+        spec:
+          containers:
+            - name: api
+              image: ghcr.io/acme/asset-register:2.1.0
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: asset-register-db
+                      key: url
+              ports:
+                - containerPort: 8000
+  k8s/service.yaml: |
+    apiVersion: v1
+    kind: Service
+    metadata:
+      name: asset-register
+    spec:
+      selector:
+        app: asset-register
+      ports:
+        - port: 80
+          targetPort: 8000
+  chart/Chart.yaml: |
+    apiVersion: v2
+    name: asset-register
+    description: Office asset register API
+    type: application
+    version: 0.3.2
+    appVersion: "2.1.0"
+  chart/values.yaml: |
+    replicaCount: 2
+
+    image:
+      repository: ghcr.io/acme/asset-register
+      tag: "2.1.0"
+
+    database:
+      existingSecret: asset-register-db
+      secretKey: url
+
+    service:
+      port: 80
+  chart/templates/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: {{ .Release.Name }}
+    spec:
+      replicas: {{ .Values.replicaCount }}
+      selector:
+        matchLabels:
+          app: {{ .Release.Name }}
+      template:
+        metadata:
+          labels:
+            app: {{ .Release.Name }}
+        spec:
+          containers:
+            - name: api
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag }}"
+              env:
+                - name: DATABASE_URL
+                  valueFrom:
+                    secretKeyRef:
+                      name: {{ .Values.database.existingSecret }}
+                      key: {{ .Values.database.secretKey }}
+              ports:
+                - containerPort: 8000

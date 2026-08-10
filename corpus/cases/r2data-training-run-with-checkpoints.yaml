@@ -1,0 +1,72 @@
+id: r2data-training-run-with-checkpoints
+origin: "A supervised fine tuning repository: one train.py driven by a YAML config, writing a checkpoint every few hundred steps. Somebody rents a GPU box, runs it until it finishes, and turns the box off. Nothing is served to anybody, and the size of the machine is decided by the model and its optimiser state, never by traffic."
+expect:
+  stage: model-runtime
+  flags: []
+files:
+  requirements.txt: |
+    torch==2.4.0
+    transformers==4.44.0
+    datasets==2.20.0
+    accelerate==0.33.0
+    wandb==0.17.5
+  train.py: |
+    import torch
+    import yaml
+    from datasets import load_from_disk
+    from transformers import (
+        AutoModelForCausalLM,
+        AutoTokenizer,
+        Trainer,
+        TrainingArguments,
+    )
+
+    config = yaml.safe_load(open("configs/sft-7b.yaml"))
+    tokenizer = AutoTokenizer.from_pretrained(config["base_model"])
+    model = AutoModelForCausalLM.from_pretrained(
+        config["base_model"], torch_dtype=torch.bfloat16
+    )
+
+    args = TrainingArguments(
+        output_dir="checkpoints",
+        per_device_train_batch_size=config["batch_size"],
+        gradient_accumulation_steps=config["grad_accum"],
+        num_train_epochs=3,
+        save_steps=500,
+        bf16=True,
+        report_to="wandb",
+    )
+
+    Trainer(
+        model=model,
+        args=args,
+        train_dataset=load_from_disk("data/tokenized"),
+    ).train()
+  configs/sft-7b.yaml: |
+    base_model: mistralai/Mistral-7B-v0.3
+    batch_size: 4
+    grad_accum: 8
+    max_seq_len: 4096
+  eval.py: |
+    import json
+    import sys
+
+    from transformers import pipeline
+
+    pipe = pipeline("text-generation", model=sys.argv[1], device=0)
+    prompts = [json.loads(line)["prompt"] for line in open("data/eval.jsonl")]
+    for prompt in prompts:
+        print(pipe(prompt, max_new_tokens=256)[0]["generated_text"])
+  .gitignore: |
+    checkpoints/
+    data/tokenized/
+    wandb/
+  README.md: |
+    # sft-7b
+
+    Fine tunes Mistral 7B on our support transcripts. One run is about 30 hours
+    on 4 x A100 80GB. Each checkpoint is roughly 27 GB, so `checkpoints/` is
+    ignored here and the keepers get pushed to S3 by hand.
+
+    There is no service in this repository. When a run finishes we take the
+    adapter and hand it to the serving team.

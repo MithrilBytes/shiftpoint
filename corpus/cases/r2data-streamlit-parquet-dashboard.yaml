@@ -1,0 +1,61 @@
+id: r2data-streamlit-parquet-dashboard
+origin: "An internal Streamlit dashboard over a parquet extract. Streamlit is not request and response: every open tab holds a websocket back to the same process, and the filter state and the cached frame live in that process's memory. It needs one server that stays up and warm, and it has no database of its own."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    streamlit==1.37.1
+    pandas==2.2.2
+    pyarrow==17.0.0
+    altair==5.3.0
+  app.py: |
+    import altair as alt
+    import pandas as pd
+    import streamlit as st
+
+    @st.cache_data(ttl=3600)
+    def load():
+        return pd.read_parquet("data/shipments.parquet")
+
+    st.title("Shipments")
+    frame = load()
+
+    if "depot" not in st.session_state:
+        st.session_state["depot"] = "all"
+
+    st.session_state["depot"] = st.selectbox(
+        "Depot", ["all", *sorted(frame["depot"].unique())]
+    )
+    window = st.slider("Weeks back", 1, 52, 12)
+
+    view = frame if st.session_state["depot"] == "all" else frame[
+        frame["depot"] == st.session_state["depot"]
+    ]
+    view = view[view["week"] >= view["week"].max() - window]
+
+    st.altair_chart(
+        alt.Chart(view).mark_line().encode(x="week", y="late_pct"),
+        use_container_width=True,
+    )
+    st.dataframe(view.groupby("depot")["late_pct"].mean())
+  .streamlit/config.toml: |
+    [server]
+    headless = true
+    port = 8501
+    enableCORS = false
+  Dockerfile: |
+    FROM python:3.11-slim
+    COPY requirements.txt .
+    RUN pip install -r requirements.txt
+    COPY . .
+    CMD ["streamlit", "run", "app.py", "--server.port=8501", "--server.address=0.0.0.0"]
+  README.md: |
+    # shipments-dashboard
+
+    Ops opens this every morning. The parquet extract is refreshed by the
+    warehouse job and is about 300 MB in memory once cached.
+
+    Do not put it anywhere that sleeps when idle: the socket drops, the cache is
+    cold and the first person in the morning waits a minute for a chart. One
+    small always on box is enough, and there is no database to point it at.

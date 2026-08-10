@@ -1,0 +1,84 @@
+id: r2infra-compose-dev-database-only
+origin: "A Fastify timesheet API on managed hosting with a managed Postgres. The only thing in the compose file is the database container developers run on their laptops so `npm run dev` has something to talk to. The compose file describes no deployment at all."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "timesheets",
+      "private": true,
+      "scripts": {
+        "dev": "node --watch src/server.js",
+        "start": "node src/server.js",
+        "migrate": "prisma migrate deploy"
+      },
+      "dependencies": {
+        "fastify": "^4.28.1",
+        "@prisma/client": "^5.17.0"
+      },
+      "devDependencies": { "prisma": "^5.17.0" }
+    }
+  src/server.js: |
+    const Fastify = require("fastify");
+    const { PrismaClient } = require("@prisma/client");
+
+    const db = new PrismaClient();
+    const app = Fastify({ logger: true });
+
+    app.get("/entries", async (req) =>
+      db.entry.findMany({ where: { userId: req.query.user } })
+    );
+
+    app.post("/entries", async (req, reply) => {
+      const entry = await db.entry.create({ data: req.body });
+      reply.code(201);
+      return entry;
+    });
+
+    app.listen({ host: "0.0.0.0", port: process.env.PORT || 3000 });
+  prisma/schema.prisma: |
+    datasource db {
+      provider = "postgresql"
+      url      = env("DATABASE_URL")
+    }
+
+    generator client {
+      provider = "prisma-client-js"
+    }
+
+    model Entry {
+      id      Int      @id @default(autoincrement())
+      userId  String
+      minutes Int
+      day     DateTime
+    }
+  docker-compose.yml: |
+    # Local development only. This brings up the database that `npm run dev`
+    # talks to while the app itself runs on your machine. Nothing here is
+    # deployed anywhere.
+    services:
+      db:
+        image: postgres:16
+        ports:
+          - "5432:5432"
+        environment:
+          POSTGRES_USER: timesheets
+          POSTGRES_PASSWORD: timesheets
+          POSTGRES_DB: timesheets_dev
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+
+    volumes:
+      pgdata:
+  README.md: |
+    # timesheets
+
+    Getting started:
+
+        docker compose up -d
+        npm run migrate
+        npm run dev
+
+    The deployed copy runs on a managed platform with a hosted Postgres. The
+    compose file is a development convenience and is not used to deploy.

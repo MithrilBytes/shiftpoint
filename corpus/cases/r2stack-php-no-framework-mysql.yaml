@@ -1,0 +1,92 @@
+id: r2stack-php-no-framework-mysql
+origin: >-
+  A rugby club's fixture list written in plain PHP with no framework and no
+  composer.json, the way an enormous amount of the web is still built. Pages
+  are `.php` files uploaded to shared hosting, and every page opens a PDO
+  connection to a MySQL database that holds the fixtures and results.
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  index.php: |
+    <?php
+    require __DIR__ . '/includes/db.php';
+
+    $rows = $pdo->query(
+        'SELECT played_on, opponent, venue, result FROM fixtures ORDER BY played_on DESC LIMIT 50'
+    );
+    ?>
+    <!DOCTYPE html>
+    <html>
+    <head><title>Brackley RFC fixtures</title></head>
+    <body>
+    <h1>Fixtures</h1>
+    <table>
+    <?php foreach ($rows as $row): ?>
+      <tr>
+        <td><?= htmlspecialchars($row['played_on']) ?></td>
+        <td><?= htmlspecialchars($row['opponent']) ?></td>
+        <td><?= htmlspecialchars($row['venue']) ?></td>
+        <td><?= htmlspecialchars($row['result']) ?></td>
+      </tr>
+    <?php endforeach; ?>
+    </table>
+    </body>
+    </html>
+  includes/db.php: |
+    <?php
+    $config = require __DIR__ . '/../config.php';
+
+    $pdo = new PDO(
+        'mysql:host=' . $config['host'] . ';dbname=' . $config['name'] . ';charset=utf8mb4',
+        $config['user'],
+        $config['pass'],
+        [PDO::ATTR_ERRMODE => PDO::ERRMODE_EXCEPTION]
+    );
+  admin/add.php: |
+    <?php
+    require __DIR__ . '/../includes/db.php';
+    require __DIR__ . '/auth.php';
+
+    if ($_SERVER['REQUEST_METHOD'] === 'POST') {
+        $stmt = $pdo->prepare(
+            'INSERT INTO fixtures (played_on, opponent, venue, result) VALUES (?, ?, ?, ?)'
+        );
+        $stmt->execute([
+            $_POST['played_on'],
+            $_POST['opponent'],
+            $_POST['venue'],
+            $_POST['result'] ?: null,
+        ]);
+        header('Location: /admin/add.php?saved=1');
+        exit;
+    }
+    ?>
+    <form method="post">
+      <input name="played_on" type="date" required>
+      <input name="opponent" required>
+      <input name="venue">
+      <input name="result">
+      <button>Save</button>
+    </form>
+  config.php.example: |
+    <?php
+    return [
+        'host' => 'localhost',
+        'name' => 'brackleyrfc',
+        'user' => 'brackleyrfc',
+        'pass' => 'change-me',
+    ];
+  schema.sql: |
+    CREATE TABLE fixtures (
+      id INT AUTO_INCREMENT PRIMARY KEY,
+      played_on DATE NOT NULL,
+      opponent VARCHAR(120) NOT NULL,
+      venue VARCHAR(120),
+      result VARCHAR(20)
+    ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4;
+  README.md: |
+    # brackleyrfc
+
+    Copy `config.php.example` to `config.php`, import `schema.sql`, upload the
+    lot to the hosting account. No build step, no dependencies.

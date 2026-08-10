@@ -1,0 +1,81 @@
+id: r2mixed-starter-template-rust-cli
+origin: >-
+  A GitHub "use this template" repository for starting a Rust command line
+  tool: clap already wired up, one real subcommand left in as an example, a
+  test that shells out to the binary, and a release workflow that publishes
+  platform archives. People press the template button and rename it. It is a
+  scaffold and a working CLI at the same time.
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "rustcli-template"
+    version = "0.1.0"
+    edition = "2021"
+
+    [[bin]]
+    name = "mytool"
+    path = "src/main.rs"
+
+    [dependencies]
+    clap = { version = "4.5", features = ["derive"] }
+    anyhow = "1.0"
+  src/main.rs: |
+    use clap::{Parser, Subcommand};
+
+    #[derive(Parser)]
+    #[command(name = "mytool", version)]
+    struct Cli {
+        #[command(subcommand)]
+        command: Command,
+    }
+
+    #[derive(Subcommand)]
+    enum Command {
+        /// Count lines in a file
+        Count { path: std::path::PathBuf },
+    }
+
+    fn main() -> anyhow::Result<()> {
+        match Cli::parse().command {
+            Command::Count { path } => {
+                let text = std::fs::read_to_string(path)?;
+                println!("{}", text.lines().count());
+            }
+        }
+        Ok(())
+    }
+  tests/cli.rs: |
+    use std::process::Command;
+
+    #[test]
+    fn prints_version() {
+        let out = Command::new(env!("CARGO_BIN_EXE_mytool")).arg("--version").output().unwrap();
+        assert!(String::from_utf8_lossy(&out.stdout).contains("0.1.0"));
+    }
+  .github/workflows/release.yml: |
+    name: release
+    on:
+      push:
+        tags: ["v*"]
+    jobs:
+      build:
+        strategy:
+          matrix:
+            target: [x86_64-unknown-linux-gnu, aarch64-apple-darwin]
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: cargo build --release --target ${{ matrix.target }}
+          - uses: softprops/action-gh-release@v2
+            with:
+              files: target/${{ matrix.target }}/release/mytool
+  README.md: |
+    # rustcli-template
+
+    Press "Use this template", then rename the binary in `Cargo.toml`, delete
+    the `count` subcommand and write your own. Tagging `v0.1.0` builds archives
+    for Linux and macOS and attaches them to the release, so users can
+    `cargo install` or download a binary.

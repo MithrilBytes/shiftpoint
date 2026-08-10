@@ -1,0 +1,36 @@
+id: r2edge-markdown-handbook-only
+origin: "A twelve person company's internal handbook. Every file is markdown, read through GitHub's own rendering. There is no site generator, no config, no code, and nothing that could be built or served."
+expect:
+  stage: unknown
+  flags: []
+files:
+  README.md: |
+    # Handbook
+
+    How we work. Edit by pull request, one reviewer, merge when green.
+
+    - [Onboarding](handbook/onboarding.md)
+    - [On call](handbook/oncall.md)
+    - [Expenses](handbook/expenses.md)
+  handbook/onboarding.md: |
+    # Onboarding
+
+    Day one: laptop, password manager invite, GitHub org, Slack.
+    Day two: pair with your buddy on a real ticket.
+    Week one: ship something small to production.
+  handbook/oncall.md: |
+    # On call
+
+    One week rotations, handover on Monday at 10:00.
+    Page only for customer facing outages. Everything else waits until morning.
+    If you are woken twice in a night, take the next morning off.
+  handbook/expenses.md: |
+    # Expenses
+
+    Under 100 pounds: buy it and upload the receipt.
+    Over 100 pounds: ask your manager first.
+    Books are always approved.
+  CONTRIBUTING.md: |
+    Pull requests only. Keep lines under 80 characters. No screenshots of
+    text. If a page has not been touched in a year, delete it rather than
+    marking it stale.

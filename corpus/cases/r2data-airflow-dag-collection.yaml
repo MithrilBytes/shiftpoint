@@ -1,0 +1,76 @@
+id: r2data-airflow-dag-collection
+origin: "A small data team running its own Airflow: a handful of DAGs plus the compose file that stands up the webserver, the scheduler and the metadata database. The scheduler is the point of the whole thing and it has to be awake at all times or nothing fires, and the metadata database holds every task instance."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  requirements.txt: |
+    apache-airflow==2.9.3
+    apache-airflow-providers-postgres==5.11.2
+    apache-airflow-providers-amazon==8.25.0
+    pandas==2.2.2
+  dags/ingest_orders.py: |
+    from datetime import datetime
+
+    from airflow import DAG
+    from airflow.operators.python import PythonOperator
+    from airflow.providers.postgres.hooks.postgres import PostgresHook
+
+    def copy_orders():
+        hook = PostgresHook(postgres_conn_id="warehouse")
+        hook.run("call load_orders_from_stage()")
+
+    with DAG(
+        "ingest_orders",
+        start_date=datetime(2024, 1, 1),
+        schedule="0 * * * *",
+        catchup=False,
+    ) as dag:
+        PythonOperator(task_id="copy_orders", python_callable=copy_orders)
+  dags/refresh_marts.py: |
+    from datetime import datetime
+
+    from airflow import DAG
+    from airflow.operators.bash import BashOperator
+
+    with DAG(
+        "refresh_marts",
+        start_date=datetime(2024, 1, 1),
+        schedule="30 2 * * *",
+        catchup=False,
+    ) as dag:
+        BashOperator(task_id="dbt_build", bash_command="dbt build --target prod")
+  docker-compose.yaml: |
+    services:
+      postgres:
+        image: postgres:16
+        environment:
+          POSTGRES_USER: airflow
+          POSTGRES_PASSWORD: airflow
+        volumes:
+          - metadata:/var/lib/postgresql/data
+      scheduler:
+        build: .
+        command: airflow scheduler
+        depends_on: [postgres]
+        volumes:
+          - ./dags:/opt/airflow/dags
+      webserver:
+        build: .
+        command: airflow webserver
+        ports:
+          - "8080:8080"
+        depends_on: [postgres]
+    volumes:
+      metadata:
+  Dockerfile: |
+    FROM apache/airflow:2.9.3-python3.11
+    COPY requirements.txt .
+    RUN pip install -r requirements.txt
+  README.md: |
+    # pipelines
+
+    Our Airflow. The scheduler runs around the clock on the data VM; if it goes
+    down the hourly ingest silently stops. The webserver is behind the office
+    VPN and the metadata database is a managed Postgres in production, not the
+    container in this compose file.

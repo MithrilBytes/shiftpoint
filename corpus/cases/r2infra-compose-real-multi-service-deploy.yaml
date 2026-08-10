@@ -1,0 +1,113 @@
+id: r2infra-compose-real-multi-service-deploy
+origin: "An invoicing service that runs on one rented VPS. The compose file is the deployment: a web process, three replicas of a BullMQ worker that renders and mails invoices, Postgres, Redis with appendonly on, and Caddy terminating TLS. Everything restarts unless stopped, and volumes hold real data."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "invoice-mailer",
+      "private": true,
+      "scripts": {
+        "start": "node src/server.js",
+        "worker": "node src/worker.js"
+      },
+      "dependencies": {
+        "express": "^4.19.2",
+        "bullmq": "^5.8.0",
+        "pg": "^8.12.0",
+        "nodemailer": "^6.9.14"
+      }
+    }
+  src/server.js: |
+    const express = require("express");
+    const { Queue } = require("bullmq");
+
+    const queue = new Queue("invoices", { connection: { url: process.env.REDIS_URL } });
+    const app = express();
+    app.use(express.json());
+
+    app.post("/invoices/:id/send", async (req, res) => {
+      await queue.add("send", { invoiceId: req.params.id, to: req.body.to });
+      res.status(202).json({ queued: true });
+    });
+
+    app.listen(3000);
+  src/worker.js: |
+    const { Worker } = require("bullmq");
+    const nodemailer = require("nodemailer");
+
+    const mail = nodemailer.createTransport(process.env.SMTP_URL);
+
+    new Worker(
+      "invoices",
+      async (job) => {
+        await mail.sendMail({
+          to: job.data.to,
+          subject: `Invoice ${job.data.invoiceId}`,
+          text: "Your invoice is attached."
+        });
+      },
+      { connection: { url: process.env.REDIS_URL }, concurrency: 5 }
+    );
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/server.js"]
+  docker-compose.yml: |
+    services:
+      web:
+        build: .
+        command: node src/server.js
+        restart: unless-stopped
+        environment:
+          DATABASE_URL: postgres://invoices:${DB_PASSWORD}@db:5432/invoices
+          REDIS_URL: redis://queue:6379
+          SMTP_URL: ${SMTP_URL}
+        depends_on: [db, queue]
+      worker:
+        build: .
+        command: node src/worker.js
+        restart: unless-stopped
+        deploy:
+          replicas: 3
+        environment:
+          DATABASE_URL: postgres://invoices:${DB_PASSWORD}@db:5432/invoices
+          REDIS_URL: redis://queue:6379
+          SMTP_URL: ${SMTP_URL}
+        depends_on: [db, queue]
+      db:
+        image: postgres:16
+        restart: unless-stopped
+        environment:
+          POSTGRES_USER: invoices
+          POSTGRES_PASSWORD: ${DB_PASSWORD}
+        volumes:
+          - pgdata:/var/lib/postgresql/data
+      queue:
+        image: redis:7
+        restart: unless-stopped
+        command: ["redis-server", "--appendonly", "yes"]
+        volumes:
+          - redisdata:/data
+      caddy:
+        image: caddy:2
+        restart: unless-stopped
+        ports:
+          - "80:80"
+          - "443:443"
+        volumes:
+          - ./Caddyfile:/etc/caddy/Caddyfile
+          - caddydata:/data
+
+    volumes:
+      pgdata:
+      redisdata:
+      caddydata:
+  Caddyfile: |
+    invoices.acme.co {
+      reverse_proxy web:3000
+    }

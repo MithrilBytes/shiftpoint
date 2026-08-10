@@ -1,0 +1,120 @@
+id: r2stack-actix-sqlx-postgres
+origin: >-
+  An actix-web service for an allotment association's plot waiting list, using
+  sqlx against Postgres. It opens a pool at startup from DATABASE_URL, has SQL
+  migrations checked in, and every route reads or writes rows. A long running
+  HTTP process plus a managed Postgres, and nothing else.
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "allotments"
+    version = "0.4.0"
+    edition = "2021"
+
+    [dependencies]
+    actix-web = "4"
+    sqlx = { version = "0.7", features = ["runtime-tokio-rustls", "postgres", "chrono", "macros"] }
+    serde = { version = "1", features = ["derive"] }
+    dotenvy = "0.15"
+  src/main.rs: |
+    use actix_web::{web, App, HttpServer};
+    use sqlx::postgres::PgPoolOptions;
+
+    mod routes;
+
+    #[actix_web::main]
+    async fn main() -> std::io::Result<()> {
+        dotenvy::dotenv().ok();
+        let url = std::env::var("DATABASE_URL").expect("DATABASE_URL is not set");
+
+        let pool = PgPoolOptions::new()
+            .max_connections(10)
+            .connect(&url)
+            .await
+            .expect("could not connect to postgres");
+
+        sqlx::migrate!().run(&pool).await.expect("migrations failed");
+
+        HttpServer::new(move || {
+            App::new()
+                .app_data(web::Data::new(pool.clone()))
+                .service(routes::list_plots)
+                .service(routes::join_waiting_list)
+        })
+        .bind(("0.0.0.0", 8080))?
+        .run()
+        .await
+    }
+  src/routes.rs: |
+    use actix_web::{get, post, web, HttpResponse, Responder};
+    use serde::{Deserialize, Serialize};
+    use sqlx::PgPool;
+
+    #[derive(Serialize)]
+    struct Plot {
+        id: i32,
+        reference: String,
+        square_metres: i32,
+        tenant: Option<String>,
+    }
+
+    #[derive(Deserialize)]
+    struct Applicant {
+        name: String,
+        email: String,
+    }
+
+    #[get("/plots")]
+    async fn list_plots(pool: web::Data<PgPool>) -> impl Responder {
+        let plots = sqlx::query_as!(
+            Plot,
+            "select id, reference, square_metres, tenant from plots order by reference"
+        )
+        .fetch_all(pool.get_ref())
+        .await
+        .unwrap();
+
+        HttpResponse::Ok().json(plots)
+    }
+
+    #[post("/waiting-list")]
+    async fn join_waiting_list(
+        pool: web::Data<PgPool>,
+        body: web::Json<Applicant>,
+    ) -> impl Responder {
+        sqlx::query!(
+            "insert into waiting_list (name, email) values ($1, $2)",
+            body.name,
+            body.email
+        )
+        .execute(pool.get_ref())
+        .await
+        .unwrap();
+
+        HttpResponse::Created().finish()
+    }
+  migrations/0001_plots.sql: |
+    create table plots (
+      id serial primary key,
+      reference text not null unique,
+      square_metres int not null,
+      tenant text
+    );
+
+    create table waiting_list (
+      id serial primary key,
+      name text not null,
+      email text not null,
+      joined_on date not null default current_date
+    );
+  .env.example: |
+    DATABASE_URL=postgres://allotments:secret@db.internal:5432/allotments
+    RUST_LOG=info
+  README.md: |
+    # allotments
+
+    Plots and the waiting list for Sowerby Allotment Association. Migrations
+    run on boot, so the Postgres user needs rights to create tables.

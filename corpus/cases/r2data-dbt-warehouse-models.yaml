@@ -1,0 +1,58 @@
+id: r2data-dbt-warehouse-models
+origin: "An analytics engineering repository: dbt models that compile to SQL and run inside a Snowflake account the company already pays for. There is no process here, no port and no artefact anyone installs. The language is unmistakable and there is nothing to host: the warehouse does the work and the run is triggered from CI."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  dbt_project.yml: |
+    name: warehouse
+    version: 1.4.0
+    profile: warehouse
+    model-paths: ["models"]
+    models:
+      warehouse:
+        staging:
+          +materialized: view
+        marts:
+          +materialized: table
+  packages.yml: |
+    packages:
+      - package: dbt-labs/dbt_utils
+        version: 1.1.1
+  models/staging/stg_orders.sql: |
+    with source as (
+        select * from {{ source('shop', 'orders') }}
+    )
+    select
+        id as order_id,
+        customer_id,
+        cast(placed_at as timestamp) as placed_at,
+        amount_cents / 100.0 as amount
+    from source
+    where status != 'cancelled'
+  models/marts/fct_revenue_daily.sql: |
+    select
+        date_trunc('day', placed_at) as day,
+        count(*) as orders,
+        sum(amount) as revenue
+    from {{ ref('stg_orders') }}
+    group by 1
+  models/schema.yml: |
+    version: 2
+    models:
+      - name: stg_orders
+        columns:
+          - name: order_id
+            tests: [unique, not_null]
+      - name: fct_revenue_daily
+        columns:
+          - name: day
+            tests: [not_null]
+  README.md: |
+    # warehouse
+
+    Our dbt project. `dbt build` runs against the ANALYTICS database in
+    Snowflake; credentials come from the profile in the CI secret store.
+
+    Nothing in here is deployed. The nightly build is a CI job, and the
+    warehouse is bought separately by finance.

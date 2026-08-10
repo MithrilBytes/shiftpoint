@@ -1,0 +1,97 @@
+id: r2cli-npm-library-with-cli
+origin: "An npm package that is a cron expression parser first and a command line tool second: a typed API under exports that other packages import, plus a thin bin that prints the next run times so you can sanity check an expression. The bin is twelve lines of wrapper around the exported function; the reason anyone adds this to a package.json is the API."
+expect:
+  stage: library
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "cronbite",
+      "version": "4.0.1",
+      "description": "Parse cron expressions and compute the next run times",
+      "type": "module",
+      "main": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "exports": { ".": { "types": "./dist/index.d.ts", "import": "./dist/index.js" } },
+      "bin": { "cronbite": "./bin/cronbite.js" },
+      "files": ["dist", "bin"],
+      "sideEffects": false,
+      "license": "MIT",
+      "scripts": { "build": "tsc -p .", "test": "node --test" }
+    }
+  src/index.ts: |
+    export { parse } from "./parse.js";
+    export { nextRuns } from "./next.js";
+    export type { CronFields } from "./parse.js";
+  src/parse.ts: |
+    export interface CronFields {
+      minute: number[];
+      hour: number[];
+      dayOfMonth: number[];
+      month: number[];
+      dayOfWeek: number[];
+    }
+
+    const RANGES: Array<[number, number]> = [[0, 59], [0, 23], [1, 31], [1, 12], [0, 6]];
+
+    export function parse(expression: string): CronFields {
+      const parts = expression.trim().split(/\s+/);
+      if (parts.length !== 5) {
+        throw new SyntaxError(`expected five fields, got ${parts.length}`);
+      }
+      const [minute, hour, dayOfMonth, month, dayOfWeek] = parts.map(expand);
+      return { minute, hour, dayOfMonth, month, dayOfWeek };
+
+      function expand(field: string, i: number): number[] {
+        const [lo, hi] = RANGES[i];
+        if (field === "*") return range(lo, hi);
+        return field.split(",").flatMap((piece) => {
+          const [a, b] = piece.split("-").map(Number);
+          return b === undefined ? [a] : range(a, b);
+        });
+      }
+    }
+
+    function range(lo: number, hi: number): number[] {
+      return Array.from({ length: hi - lo + 1 }, (_, i) => lo + i);
+    }
+  bin/cronbite.js: |
+    #!/usr/bin/env node
+    import { nextRuns } from "../dist/index.js";
+
+    const [expression, count = "5"] = process.argv.slice(2);
+    if (!expression) {
+      console.error("usage: cronbite '<expression>' [count]");
+      process.exit(2);
+    }
+    for (const date of nextRuns(expression, Number(count))) {
+      console.log(date.toISOString());
+    }
+  test/parse.test.js: |
+    import { test } from "node:test";
+    import assert from "node:assert/strict";
+    import { parse } from "../dist/index.js";
+
+    test("expands a star into every minute", () => {
+      assert.equal(parse("* * * * *").minute.length, 60);
+    });
+
+    test("rejects four fields", () => {
+      assert.throws(() => parse("* * * *"), SyntaxError);
+    });
+  README.md: |
+    # cronbite
+
+    ```js
+    import { parse, nextRuns } from "cronbite";
+
+    const fields = parse("*/15 9-17 * * 1-5");
+    const upcoming = nextRuns("*/15 9-17 * * 1-5", 3);
+    ```
+
+    Used by schedulers to decide when a job is due. There is also a small
+    `cronbite` command for eyeballing an expression:
+
+    ```
+    npx cronbite '0 3 * * 0' 3
+    ```

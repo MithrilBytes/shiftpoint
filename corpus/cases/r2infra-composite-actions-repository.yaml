@@ -1,0 +1,100 @@
+id: r2infra-composite-actions-repository
+origin: "An organisation's shared GitHub Actions repository. Three composite actions in three directories, tagged v2 and consumed from other repositories as `uses: acme/actions/setup-tooling@v2`. Nothing here runs anywhere but on a runner someone else pays for, and nothing here is deployed."
+expect:
+  stage: library
+  flags: []
+files:
+  README.md: |
+    # acme/actions
+
+    Shared composite actions. Pin the major tag:
+
+    ```yaml
+    - uses: acme/actions/setup-tooling@v2
+      with:
+        node-version: "20"
+    - uses: acme/actions/publish-npm@v2
+      with:
+        token: ${{ secrets.NPM_TOKEN }}
+    ```
+
+    The `v2` tag is moved on every release. Breaking changes get a new major.
+  setup-tooling/action.yml: |
+    name: Setup tooling
+    description: Install the Node and pnpm versions this organisation standardises on
+    inputs:
+      node-version:
+        description: Node major version
+        required: false
+        default: "20"
+    runs:
+      using: composite
+      steps:
+        - uses: actions/setup-node@v4
+          with:
+            node-version: ${{ inputs.node-version }}
+            cache: pnpm
+        - shell: bash
+          run: |
+            corepack enable
+            pnpm install --frozen-lockfile
+  publish-npm/action.yml: |
+    name: Publish to npm
+    description: Build, verify provenance and publish the package in the working directory
+    inputs:
+      token:
+        description: npm automation token
+        required: true
+      tag:
+        description: dist-tag to publish under
+        required: false
+        default: latest
+    runs:
+      using: composite
+      steps:
+        - shell: bash
+          run: pnpm run build
+        - shell: bash
+          env:
+            NODE_AUTH_TOKEN: ${{ inputs.token }}
+          run: pnpm publish --provenance --access public --tag ${{ inputs.tag }}
+  notify-release/action.yml: |
+    name: Notify release
+    description: Post a release note to the team channel
+    inputs:
+      webhook:
+        required: true
+      version:
+        required: true
+    runs:
+      using: composite
+      steps:
+        - shell: bash
+          run: |
+            curl -sS -X POST "${{ inputs.webhook }}" \
+              -H 'content-type: application/json' \
+              -d "{\"text\":\"${{ github.repository }} ${{ inputs.version }} released\"}"
+  .github/workflows/test.yml: |
+    name: test actions
+    on: [push, pull_request]
+    jobs:
+      setup-tooling:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - uses: ./setup-tooling
+            with:
+              node-version: "22"
+          - run: node --version
+  CHANGELOG.md: |
+    ## v2.3.0
+
+    - setup-tooling: cache pnpm store by lockfile hash
+
+    ## v2.2.0
+
+    - publish-npm: add `tag` input
+
+    ## v2.0.0
+
+    - setup-tooling: drop Node 16

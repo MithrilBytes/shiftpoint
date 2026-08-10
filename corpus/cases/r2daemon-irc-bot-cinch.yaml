@@ -1,0 +1,63 @@
+id: r2daemon-irc-bot-cinch
+origin: "A Cinch bot that sits in two channels on a public IRC network, answers a couple of commands and relays build notices it is handed over a named pipe. IRC gives you no way to reconnect on demand: the bot has to stay joined, which means the process stays up."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "cinch", "~> 2.3"
+  bot.rb: |
+    require "cinch"
+    require_relative "lib/commands"
+    require_relative "lib/relay"
+
+    BOOT_TIME = Time.now
+
+    bot = Cinch::Bot.new do
+      configure do |c|
+        c.server = "irc.libera.chat"
+        c.port = 6697
+        c.ssl.use = true
+        c.nick = "cauldron"
+        c.channels = ["#cauldron", "#cauldron-builds"]
+      end
+
+      on :message, /^!(\w+)(.*)/ do |m, command, rest|
+        reply = Commands.run(command, rest.to_s.strip)
+        m.reply(reply) if reply
+      end
+    end
+
+    Thread.new { Relay.pump(bot) }
+    bot.start
+  lib/commands.rb: |
+    module Commands
+      TOPICS = {
+        "help" => "!help, !uptime, !where <service>",
+        "where" => "Everything is in eu-west-1 except the mailer.",
+      }.freeze
+
+      def self.run(command, argument)
+        return "up since #{BOOT_TIME}" if command == "uptime"
+        TOPICS[command]
+      end
+    end
+  lib/relay.rb: |
+    module Relay
+      PIPE = "/var/run/cauldron/builds"
+
+      def self.pump(bot)
+        File.open(PIPE, "r") do |pipe|
+          pipe.each_line do |line|
+            bot.channels.first.send("build: #{line.strip}")
+          end
+        end
+      end
+    end
+  README.md: |
+    # cauldron
+
+    `bundle exec ruby bot.rb`. Nothing is stored between runs; if the bot
+    drops off the network it has to reconnect and rejoin, so keep it running.

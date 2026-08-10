@@ -1,0 +1,76 @@
+id: r2cli-eslint-plugin
+origin: "An ESLint plugin published to npm: rules, a flat config preset, eslint as a peer dependency, and no executable of its own. Other people install it as a dev dependency and their copy of eslint loads it. It is developer tooling that ships as a package rather than as a program."
+expect:
+  stage: library
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "eslint-plugin-no-floating-timers",
+      "version": "1.4.2",
+      "description": "Forbid setTimeout and setInterval whose handles are never cleared",
+      "main": "lib/index.js",
+      "files": ["lib"],
+      "keywords": ["eslint", "eslintplugin", "eslint-plugin"],
+      "peerDependencies": { "eslint": ">=8.40.0" },
+      "devDependencies": { "eslint": "^9.0.0", "mocha": "^10.4.0" },
+      "scripts": { "test": "mocha tests/**/*.js" },
+      "license": "MIT"
+    }
+  lib/index.js: |
+    const noFloatingTimers = require("./rules/no-floating-timers");
+
+    const plugin = {
+      meta: { name: "no-floating-timers", version: "1.4.2" },
+      rules: { "no-floating-timers": noFloatingTimers },
+    };
+
+    plugin.configs = {
+      recommended: {
+        plugins: { "no-floating-timers": plugin },
+        rules: { "no-floating-timers/no-floating-timers": "error" },
+      },
+    };
+
+    module.exports = plugin;
+  lib/rules/no-floating-timers.js: |
+    module.exports = {
+      meta: {
+        type: "problem",
+        docs: { description: "Require the handle from setInterval to be stored" },
+        schema: [],
+        messages: { floating: "The handle from {{name}} is discarded." },
+      },
+      create(context) {
+        return {
+          CallExpression(node) {
+            const name = node.callee.name;
+            if (name !== "setInterval" && name !== "setTimeout") return;
+            if (node.parent.type === "ExpressionStatement") {
+              context.report({ node, messageId: "floating", data: { name } });
+            }
+          },
+        };
+      },
+    };
+  tests/no-floating-timers.js: |
+    const { RuleTester } = require("eslint");
+    const rule = require("../lib/rules/no-floating-timers");
+
+    new RuleTester().run("no-floating-timers", rule, {
+      valid: ["const id = setInterval(tick, 100); clearInterval(id);"],
+      invalid: [{ code: "setInterval(tick, 100);", errors: 1 }],
+    });
+  README.md: |
+    # eslint-plugin-no-floating-timers
+
+    ```
+    npm install --save-dev eslint-plugin-no-floating-timers
+    ```
+
+    ```js
+    import noFloatingTimers from "eslint-plugin-no-floating-timers";
+    export default [noFloatingTimers.configs.recommended];
+    ```
+
+    There is no binary here. Your eslint runs the rule.

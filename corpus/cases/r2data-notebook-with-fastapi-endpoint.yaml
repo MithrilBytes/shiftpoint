@@ -1,0 +1,90 @@
+id: r2data-notebook-with-fastapi-endpoint
+origin: "A research repository that grew a serving edge: the notebook still fits the triage classifier, but there is now a FastAPI endpoint the intake tool calls, and every prediction and every nurse correction is appended to a SQLite file next to the process. That file is the training set for the next round, so it is not scratch: it has to sit on a disk that survives a restart, on one server, because two copies would each keep half the labels."
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.112.0
+    uvicorn[standard]==0.30.5
+    scikit-learn==1.5.1
+    pandas==2.2.2
+    joblib==1.4.2
+  notebooks/fit-triage-model.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 9,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import joblib, sqlite3\n", "import pandas as pd\n", "from sklearn.linear_model import LogisticRegression\n", "\n", "labels = pd.read_sql('select * from feedback where corrected is not null', sqlite3.connect('../var/triage.sqlite'))\n", "model = LogisticRegression(max_iter=400).fit(labels[FEATURES], labels['corrected'])\n", "joblib.dump(model, '../model/triage.joblib')"]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": ["Round 4: 2,180 corrections since March, macro F1 up from 0.71 to 0.78."]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  api/main.py: |
+    import sqlite3
+
+    import joblib
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+
+    DB = "var/triage.sqlite"
+    MODEL = joblib.load("model/triage.joblib")
+    FEATURES = ["age", "onset_hours", "temp_c", "hr", "sats"]
+
+    app = FastAPI()
+
+    class Case(BaseModel):
+        age: float
+        onset_hours: float
+        temp_c: float
+        hr: float
+        sats: float
+
+    @app.post("/triage")
+    def triage(case: Case):
+        row = [[getattr(case, name) for name in FEATURES]]
+        band = MODEL.predict(row)[0]
+        with sqlite3.connect(DB) as conn:
+            cursor = conn.execute(
+                "insert into feedback (age, onset_hours, temp_c, hr, sats, predicted)"
+                " values (?, ?, ?, ?, ?, ?)",
+                (*row[0], band),
+            )
+        return {"id": cursor.lastrowid, "band": band}
+
+    @app.post("/triage/{case_id}/correct")
+    def correct(case_id: int, band: str):
+        with sqlite3.connect(DB) as conn:
+            conn.execute(
+                "update feedback set corrected = ? where id = ?", (band, case_id)
+            )
+        return {"ok": True}
+  api/schema.sql: |
+    create table if not exists feedback (
+        id integer primary key,
+        age real, onset_hours real, temp_c real, hr real, sats real,
+        predicted text not null,
+        corrected text,
+        seen_at text default current_timestamp
+    );
+  README.md: |
+    # triage
+
+    `notebooks/fit-triage-model.ipynb` fits the model, `api/main.py` serves it.
+    The classifier is a logistic regression and `model/triage.joblib` is 6 KB,
+    so serving it costs nothing to speak of.
+
+    What matters is `var/triage.sqlite`. Every call and every correction from
+    the nurses lands there and it is the only copy of the labels we have. Keep
+    it on a real disk and run exactly one instance; we pull the file down before
+    each retraining round.

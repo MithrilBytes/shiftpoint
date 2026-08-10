@@ -1,0 +1,103 @@
+id: r2mixed-course-notebooks
+origin: >-
+  The repository for a ten week applied statistics course: one notebook per
+  lesson, a matching solutions folder, a requirements file and a syllabus.
+  Students clone it or open the badges in Colab. Many small projects in one
+  repository, none of which is a service and none of which anyone deploys.
+expect:
+  stage: notebook
+  flags: []
+files:
+  README.md: |
+    # STAT 214: Applied Statistics with Python
+
+    Ten weeks, one notebook per lesson. Clone the repo and run
+    `jupyter lab`, or click the Colab badge at the top of any lesson.
+
+    | Week | Lesson |
+    | --- | --- |
+    | 1 | Describing data |
+    | 5 | Linear regression |
+    | 9 | Bootstrap intervals |
+
+    Solutions are pushed on the Friday after each lab.
+  requirements.txt: |
+    numpy==1.26.4
+    pandas==2.2.2
+    matplotlib==3.9.0
+    scikit-learn==1.5.1
+    statsmodels==0.14.2
+    jupyterlab==4.2.3
+  lessons/01-describing-data.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": ["# Week 1: describing data\n", "Load the penguins extract and summarise it."]
+      },
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import pandas as pd\n", "df = pd.read_csv('../data/penguins.csv')\n", "df.describe()"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  lessons/05-linear-regression.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 2,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import statsmodels.formula.api as smf\n", "model = smf.ols('mass ~ flipper', data=df).fit()\n", "model.summary()"]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": ["**Exercise.** Add species as a categorical term and interpret the coefficients."]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  lessons/09-bootstrap.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import numpy as np\n", "boot = [np.random.choice(x, len(x)).mean() for _ in range(2000)]\n", "np.percentile(boot, [2.5, 97.5])"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  solutions/05-linear-regression-solution.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 1,
+       "metadata": {},
+       "outputs": [],
+       "source": ["model = smf.ols('mass ~ flipper + C(species)', data=df).fit()\n", "model.params"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  data/README.md: |
+    Small CSV extracts used by the lessons. Everything here is under 2 MB and
+    checked in on purpose so the notebooks run offline during the lab.

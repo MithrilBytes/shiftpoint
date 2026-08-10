@@ -1,0 +1,81 @@
+id: r2data-vector-search-pgvector-api
+origin: "Search over a documentation corpus: FastAPI takes the query, gets an embedding from a hosted provider over HTTPS, and hands the vector to Postgres with pgvector to do the nearest neighbour work. No model is loaded in this process. The corpus is four million chunks and the index does not fit in anything free, so this is an ordinary stateless app in front of a real managed database."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.112.0
+    uvicorn[standard]==0.30.5
+    psycopg[binary,pool]==3.2.1
+    pgvector==0.3.2
+    httpx==0.27.0
+  main.py: |
+    import os
+
+    import httpx
+    from fastapi import FastAPI
+    from psycopg_pool import ConnectionPool
+
+    pool = ConnectionPool(os.environ["DATABASE_URL"], min_size=2, max_size=10)
+    app = FastAPI()
+
+    SQL = """
+    select chunk_id, document, snippet, embedding <=> %s::vector as distance
+    from chunks
+    order by embedding <=> %s::vector
+    limit %s
+    """
+
+    async def embed(text: str) -> list[float]:
+        async with httpx.AsyncClient(timeout=20) as client:
+            response = await client.post(
+                "https://api.embeddings.example.com/v1/embeddings",
+                headers={"Authorization": f"Bearer {os.environ['EMBED_KEY']}"},
+                json={"input": text, "model": "text-embed-3-small"},
+            )
+        return response.json()["data"][0]["embedding"]
+
+    @app.get("/search")
+    async def search(q: str, k: int = 10):
+        vector = str(await embed(q))
+        with pool.connection() as conn:
+            rows = conn.execute(SQL, (vector, vector, k)).fetchall()
+        return [
+            {"chunk_id": row[0], "document": row[1], "snippet": row[2], "score": 1 - row[3]}
+            for row in rows
+        ]
+  migrations/001_chunks.sql: |
+    create extension if not exists vector;
+
+    create table chunks (
+        chunk_id bigserial primary key,
+        document text not null,
+        snippet text not null,
+        embedding vector(1536) not null
+    );
+
+    create index chunks_embedding_idx on chunks
+        using ivfflat (embedding vector_cosine_ops) with (lists = 2000);
+  ingest.py: |
+    import os
+    import sys
+
+    import psycopg
+
+    with psycopg.connect(os.environ["DATABASE_URL"]) as conn:
+        with conn.cursor().copy(
+            "copy chunks (document, snippet, embedding) from stdin"
+        ) as copy:
+            for line in open(sys.argv[1]):
+                copy.write(line)
+  README.md: |
+    # docsearch
+
+    `GET /search?q=...` returns the ten closest chunks.
+
+    The corpus is 4.1 million chunks. The table plus the ivfflat index is a bit
+    over 9 GB on disk and the database needs enough memory to keep the index
+    warm or a query goes from 40 ms to two seconds. Embeddings are bought from
+    the provider by the token, so the API process itself stays small and holds
+    nothing but the connection pool.

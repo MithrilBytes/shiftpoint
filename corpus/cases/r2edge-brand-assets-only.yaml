@@ -1,0 +1,37 @@
+id: r2edge-brand-assets-only
+origin: "The brand repository a design team hands to contractors: logo files, a colour and type specification, and a usage note. The heavy binaries are in Git LFS. Nothing in it is a program in any language."
+expect:
+  stage: unknown
+  flags: []
+files:
+  README.md: |
+    # Brand
+
+    Logos, colours, type. Ask design before putting anything from here on a
+    product surface. PNG, AI and PDF files are in Git LFS, so run
+    `git lfs install` before cloning.
+  .gitattributes: |
+    *.png filter=lfs diff=lfs merge=lfs -text
+    *.ai filter=lfs diff=lfs merge=lfs -text
+    *.pdf filter=lfs diff=lfs merge=lfs -text
+  logo/wordmark.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 48">
+      <rect width="240" height="48" fill="none"/>
+      <path d="M8 34V14h10l8 14 8-14h10v20" fill="#1B2A4A"/>
+    </svg>
+  logo/mark-mono.svg: |
+    <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 48 48">
+      <circle cx="24" cy="24" r="22" fill="#000000"/>
+      <path d="M16 30V18h16" stroke="#FFFFFF" stroke-width="4" fill="none"/>
+    </svg>
+  colour-and-type.md: |
+    Primary   #1B2A4A
+    Accent    #E4572E
+    Paper     #FAF7F2
+
+    Headings: Georgia Bold, tracking -1.
+    Body: Inter Regular, 16/1.5.
+  usage.md: |
+    Do not recolour the mark. Do not set the wordmark over a photograph.
+    Clear space on every side is the height of the M. Minimum width of the
+    wordmark in print is 24mm.

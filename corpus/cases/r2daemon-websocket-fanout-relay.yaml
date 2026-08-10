@@ -1,0 +1,115 @@
+id: r2daemon-websocket-fanout-relay
+origin: "A fan out relay in front of a transit agency's vehicle position feed. It keeps one upstream websocket open for the whole life of the process and pushes each update to every browser that has connected to it, so the agency sees one client instead of four hundred. The last known positions live in a map in memory."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/citylab/vehiclerelay
+
+    go 1.22
+
+    require (
+        github.com/gorilla/websocket v1.5.3
+    )
+  main.go: |
+    package main
+
+    import (
+        "log"
+        "net/http"
+        "os"
+    )
+
+    func main() {
+        hub := NewHub()
+        go hub.Run()
+        go hub.FollowUpstream(os.Getenv("FEED_URL"))
+
+        http.HandleFunc("/stream", hub.Subscribe)
+        log.Fatal(http.ListenAndServe(":8080", nil))
+    }
+  hub.go: |
+    package main
+
+    import (
+        "net/http"
+        "sync"
+
+        "github.com/gorilla/websocket"
+    )
+
+    var upgrader = websocket.Upgrader{}
+
+    type Hub struct {
+        mu        sync.RWMutex
+        clients   map[*websocket.Conn]bool
+        latest    map[string][]byte
+        broadcast chan []byte
+    }
+
+    func NewHub() *Hub {
+        return &Hub{
+            clients:   map[*websocket.Conn]bool{},
+            latest:    map[string][]byte{},
+            broadcast: make(chan []byte, 256),
+        }
+    }
+
+    func (h *Hub) Run() {
+        for payload := range h.broadcast {
+            h.mu.RLock()
+            for client := range h.clients {
+                client.WriteMessage(websocket.TextMessage, payload)
+            }
+            h.mu.RUnlock()
+        }
+    }
+
+    func (h *Hub) Subscribe(w http.ResponseWriter, r *http.Request) {
+        conn, err := upgrader.Upgrade(w, r, nil)
+        if err != nil {
+            return
+        }
+        h.mu.Lock()
+        h.clients[conn] = true
+        for _, snapshot := range h.latest {
+            conn.WriteMessage(websocket.TextMessage, snapshot)
+        }
+        h.mu.Unlock()
+    }
+  upstream.go: |
+    package main
+
+    import (
+        "time"
+
+        "github.com/gorilla/websocket"
+    )
+
+    func (h *Hub) FollowUpstream(url string) {
+        for {
+            conn, _, err := websocket.DefaultDialer.Dial(url, nil)
+            if err != nil {
+                time.Sleep(5 * time.Second)
+                continue
+            }
+            for {
+                _, payload, err := conn.ReadMessage()
+                if err != nil {
+                    break
+                }
+                h.mu.Lock()
+                h.latest[vehicleID(payload)] = payload
+                h.mu.Unlock()
+                h.broadcast <- payload
+            }
+            conn.Close()
+        }
+    }
+  README.md: |
+    # vehiclerelay
+
+    One upstream connection, many downstream ones, all of them held open.
+    New subscribers get the current snapshot immediately, which only works
+    because the process has been listening since before they arrived.

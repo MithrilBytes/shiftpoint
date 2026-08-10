@@ -1,0 +1,94 @@
+id: r2mixed-three-services-monorepo
+origin: >-
+  A monorepo with three deployables that all ship together: an Express API, a
+  BullMQ worker that renders video thumbnails off a Redis queue, and a small
+  websocket service that pushes progress to the browser. Postgres holds the
+  jobs table. The compose file is how the three run locally, and it is an
+  honest picture of what production needs rather than an inflated one.
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "clipworks",
+      "private": true,
+      "workspaces": ["services/*"]
+    }
+  services/api/package.json: |
+    {
+      "name": "@clipworks/api",
+      "scripts": { "start": "node src/index.js" },
+      "dependencies": { "express": "^4.19.2", "pg": "^8.12.0", "bullmq": "^5.8.7" }
+    }
+  services/api/src/index.js: |
+    const express = require("express");
+    const { Pool } = require("pg");
+    const { Queue } = require("bullmq");
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+    const renders = new Queue("renders", { connection: { url: process.env.REDIS_URL } });
+    const app = express();
+
+    app.post("/clips/:id/render", async (req, res) => {
+      await pool.query("update clips set state = 'queued' where id = $1", [req.params.id]);
+      await renders.add("thumbnail", { clipId: req.params.id });
+      res.status(202).json({ state: "queued" });
+    });
+
+    app.listen(3000);
+  services/worker/package.json: |
+    {
+      "name": "@clipworks/worker",
+      "scripts": { "start": "node src/index.js" },
+      "dependencies": { "bullmq": "^5.8.7", "pg": "^8.12.0", "fluent-ffmpeg": "^2.1.3" }
+    }
+  services/worker/src/index.js: |
+    const { Worker } = require("bullmq");
+    const ffmpeg = require("fluent-ffmpeg");
+
+    new Worker(
+      "renders",
+      async (job) => {
+        await new Promise((ok, fail) =>
+          ffmpeg(`/media/${job.data.clipId}.mp4`)
+            .screenshots({ count: 4, folder: "/media/thumbs" })
+            .on("end", ok)
+            .on("error", fail)
+        );
+      },
+      { connection: { url: process.env.REDIS_URL }, concurrency: 2 }
+    );
+  services/realtime/package.json: |
+    {
+      "name": "@clipworks/realtime",
+      "scripts": { "start": "node src/index.js" },
+      "dependencies": { "ws": "^8.18.0", "ioredis": "^5.4.1" }
+    }
+  docker-compose.yml: |
+    services:
+      api:
+        build: ./services/api
+        environment: [DATABASE_URL, REDIS_URL]
+        depends_on: [postgres, redis]
+      worker:
+        build: ./services/worker
+        environment: [DATABASE_URL, REDIS_URL]
+        depends_on: [postgres, redis]
+      realtime:
+        build: ./services/realtime
+        environment: [REDIS_URL]
+        depends_on: [redis]
+      postgres:
+        image: postgres:16
+        volumes: ["pgdata:/var/lib/postgresql/data"]
+      redis:
+        image: redis:7
+    volumes:
+      pgdata:
+  README.md: |
+    # clipworks
+
+    Three services, deployed together on every release: `api`, `worker` and
+    `realtime`. Renders take minutes, so the API only queues them and the
+    worker has to be up whether or not anyone is making requests.

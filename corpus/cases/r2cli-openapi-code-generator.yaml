@@ -1,0 +1,80 @@
+id: r2cli-openapi-code-generator
+origin: "A code generator that turns an OpenAPI document into a typed Python client, using jinja templates. Teams run it by hand when the spec changes, or as a make target. It writes files into a directory and exits; the API it generates a client for lives somewhere else entirely."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  pyproject.toml: |
+    [project]
+    name = "clientforge"
+    version = "0.7.0"
+    description = "Generate a typed Python client from an OpenAPI document"
+    requires-python = ">=3.10"
+    dependencies = ["jinja2>=3.1", "pyyaml>=6.0", "click>=8.1"]
+
+    [project.scripts]
+    clientforge = "clientforge.__main__:main"
+
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+  src/clientforge/__main__.py: |
+    from pathlib import Path
+
+    import click
+    import yaml
+
+    from .render import render_client
+
+    @click.command()
+    @click.argument("spec", type=click.Path(exists=True, path_type=Path))
+    @click.option("--out", type=click.Path(path_type=Path), required=True)
+    def main(spec: Path, out: Path) -> None:
+        """Read SPEC and write a client package into OUT."""
+        document = yaml.safe_load(spec.read_text())
+        out.mkdir(parents=True, exist_ok=True)
+        (out / "client.py").write_text(render_client(document))
+        click.echo(f"wrote {out / 'client.py'}")
+  src/clientforge/render.py: |
+    from jinja2 import Environment, PackageLoader
+
+    env = Environment(loader=PackageLoader("clientforge", "templates"))
+
+    def render_client(document):
+        operations = [
+            {"name": op["operationId"], "method": method.upper(), "path": path}
+            for path, methods in document["paths"].items()
+            for method, op in methods.items()
+        ]
+        return env.get_template("client.py.jinja").render(
+            title=document["info"]["title"], operations=operations
+        )
+  src/clientforge/templates/client.py.jinja: |
+    # Generated from {{ title }}. Do not edit.
+    import httpx
+
+    class Client:
+        def __init__(self, base_url: str, token: str | None = None):
+            self._http = httpx.Client(base_url=base_url)
+    {% for op in operations %}
+        def {{ op.name }}(self, **params):
+            return self._http.request("{{ op.method }}", "{{ op.path }}", params=params)
+    {% endfor %}
+  tests/test_render.py: |
+    from clientforge.render import render_client
+
+    def test_emits_one_method_per_operation():
+        doc = {
+            "info": {"title": "Demo"},
+            "paths": {"/widgets": {"get": {"operationId": "list_widgets"}}},
+        }
+        assert "def list_widgets" in render_client(doc)
+  README.md: |
+    # clientforge
+
+    ```
+    pipx install clientforge
+    clientforge openapi.yaml --out src/acme/generated
+    ```
+
+    Run it when the spec changes. Check the output into your repository.

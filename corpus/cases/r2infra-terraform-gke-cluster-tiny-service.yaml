@@ -1,0 +1,92 @@
+id: r2infra-terraform-gke-cluster-tiny-service
+origin: "A Sinatra endpoint that answers whether a deploy freeze is on. The freeze windows are a constant in the source. The repository also contains Terraform that stands up a dedicated GKE Autopilot cluster, a VPC, a subnet and an Artifact Registry repository to run it."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: [kubernetes-without-demand]
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "sinatra", "~> 4.0"
+    gem "rackup"
+    gem "puma"
+  app.rb: |
+    require "sinatra"
+    require "json"
+    require "time"
+
+    FREEZES = [
+      { "from" => Time.utc(2026, 12, 18), "to" => Time.utc(2027, 1, 5), "why" => "holidays" }
+    ].freeze
+
+    get "/freeze" do
+      content_type :json
+      now = Time.now.utc
+      window = FREEZES.find { |f| now >= f["from"] && now <= f["to"] }
+      { frozen: !window.nil?, window: window }.to_json
+    end
+  Dockerfile: |
+    FROM ruby:3.3-slim
+    WORKDIR /app
+    COPY Gemfile ./
+    RUN bundle install
+    COPY app.rb ./
+    CMD ["bundle", "exec", "puma", "-p", "8080", "app.rb"]
+  terraform/versions.tf: |
+    terraform {
+      required_version = ">= 1.6"
+
+      required_providers {
+        google = {
+          source  = "hashicorp/google"
+          version = "~> 5.30"
+        }
+      }
+
+      backend "gcs" {
+        bucket = "acme-tfstate"
+        prefix = "freeze-api"
+      }
+    }
+  terraform/variables.tf: |
+    variable "project_id" {
+      type = string
+    }
+
+    variable "region" {
+      type    = string
+      default = "europe-west2"
+    }
+  terraform/main.tf: |
+    provider "google" {
+      project = var.project_id
+      region  = var.region
+    }
+
+    resource "google_compute_network" "vpc" {
+      name                    = "freeze-api-vpc"
+      auto_create_subnetworks = false
+    }
+
+    resource "google_compute_subnetwork" "subnet" {
+      name          = "freeze-api-subnet"
+      region        = var.region
+      network       = google_compute_network.vpc.id
+      ip_cidr_range = "10.20.0.0/20"
+    }
+
+    resource "google_container_cluster" "primary" {
+      name                = "freeze-api"
+      location            = var.region
+      enable_autopilot    = true
+      deletion_protection = false
+
+      network    = google_compute_network.vpc.id
+      subnetwork = google_compute_subnetwork.subnet.id
+    }
+
+    resource "google_artifact_registry_repository" "images" {
+      location      = var.region
+      repository_id = "freeze-api"
+      format        = "DOCKER"
+    }

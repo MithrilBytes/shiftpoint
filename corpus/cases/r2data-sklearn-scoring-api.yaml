@@ -1,0 +1,53 @@
+id: r2data-sklearn-scoring-api
+origin: "The other kind of model API: a gradient boosted classifier of a couple of hundred kilobytes, unpickled once at startup and scored in about two milliseconds on one CPU core. It calls itself machine learning, but nothing about the machine it needs is decided by the model. It is an ordinary stateless Flask app with no database, and the free tier of any managed host will run it."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  requirements.txt: |
+    flask==3.0.3
+    gunicorn==22.0.0
+    scikit-learn==1.5.1
+    numpy==2.0.1
+    joblib==1.4.2
+  app.py: |
+    import joblib
+    import numpy as np
+    from flask import Flask, jsonify, request
+
+    MODEL = joblib.load("model/leadscore.joblib")
+    FIELDS = ["pages_seen", "days_since_signup", "seats", "trial_events"]
+
+    app = Flask(__name__)
+
+    @app.post("/score")
+    def score():
+        payload = request.get_json()
+        row = np.array([[float(payload[field]) for field in FIELDS]])
+        return jsonify({"probability": float(MODEL.predict_proba(row)[0][1])})
+
+    @app.get("/healthz")
+    def healthz():
+        return jsonify({"ok": True})
+  train_model.py: |
+    import joblib
+    import pandas as pd
+    from sklearn.ensemble import GradientBoostingClassifier
+
+    frame = pd.read_csv("data/leads.csv")
+    features = frame[["pages_seen", "days_since_signup", "seats", "trial_events"]]
+    model = GradientBoostingClassifier(max_depth=3, n_estimators=120)
+    model.fit(features, frame["converted"])
+    joblib.dump(model, "model/leadscore.joblib")
+  Procfile: |
+    web: gunicorn app:app --workers 2 --bind 0.0.0.0:$PORT
+  README.md: |
+    # leadscore
+
+    `model/leadscore.joblib` is committed and is 184 KB. `train_model.py` is run
+    by a human on a laptop every few months when the sales team asks; it is not
+    part of the deployment.
+
+    Serving is CPU only. A score takes about 2 ms and the whole process sits
+    under 200 MB of RAM. Nothing is written down anywhere: the caller keeps the
+    number.

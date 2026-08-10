@@ -1,0 +1,178 @@
+id: r2infra-kubernetes-operator
+origin: "A kubebuilder operator that reconciles a Backup custom resource into volume snapshots. The manifests in config/ are not decoration on top of an app: the CRD is the operator's interface and the manager Deployment is the operator itself. It is one process that holds watches on the API server and never returns, with no datastore of its own."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/acme/backup-operator
+
+    go 1.22
+
+    require (
+    	k8s.io/api v0.30.2
+    	k8s.io/apimachinery v0.30.2
+    	k8s.io/client-go v0.30.2
+    	sigs.k8s.io/controller-runtime v0.18.4
+    )
+  cmd/main.go: |
+    package main
+
+    import (
+    	ctrl "sigs.k8s.io/controller-runtime"
+
+    	backupv1alpha1 "github.com/acme/backup-operator/api/v1alpha1"
+    	"github.com/acme/backup-operator/internal/controller"
+    )
+
+    func main() {
+    	mgr, err := ctrl.NewManager(ctrl.GetConfigOrDie(), ctrl.Options{
+    		LeaderElection:   true,
+    		LeaderElectionID: "backup-operator.acme.io",
+    	})
+    	if err != nil {
+    		panic(err)
+    	}
+
+    	if err := backupv1alpha1.AddToScheme(mgr.GetScheme()); err != nil {
+    		panic(err)
+    	}
+    	if err := (&controller.BackupReconciler{Client: mgr.GetClient()}).SetupWithManager(mgr); err != nil {
+    		panic(err)
+    	}
+
+    	// Blocks for the life of the pod, watching the API server.
+    	if err := mgr.Start(ctrl.SetupSignalHandler()); err != nil {
+    		panic(err)
+    	}
+    }
+  api/v1alpha1/backup_types.go: |
+    package v1alpha1
+
+    import metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+
+    type BackupSpec struct {
+    	Schedule  string `json:"schedule"`
+    	ClaimName string `json:"claimName"`
+    	Retain    int    `json:"retain,omitempty"`
+    }
+
+    type BackupStatus struct {
+    	LastSnapshot *metav1.Time `json:"lastSnapshot,omitempty"`
+    	Phase        string       `json:"phase,omitempty"`
+    }
+
+    type Backup struct {
+    	metav1.TypeMeta   `json:",inline"`
+    	metav1.ObjectMeta `json:"metadata,omitempty"`
+
+    	Spec   BackupSpec   `json:"spec,omitempty"`
+    	Status BackupStatus `json:"status,omitempty"`
+    }
+  internal/controller/backup_controller.go: |
+    package controller
+
+    import (
+    	"context"
+    	"time"
+
+    	ctrl "sigs.k8s.io/controller-runtime"
+    	"sigs.k8s.io/controller-runtime/pkg/client"
+
+    	backupv1alpha1 "github.com/acme/backup-operator/api/v1alpha1"
+    )
+
+    type BackupReconciler struct {
+    	client.Client
+    }
+
+    func (r *BackupReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
+    	var backup backupv1alpha1.Backup
+    	if err := r.Get(ctx, req.NamespacedName, &backup); err != nil {
+    		return ctrl.Result{}, client.IgnoreNotFound(err)
+    	}
+
+    	// Take a snapshot if the schedule is due, prune anything past Retain,
+    	// then come back and check again.
+    	return ctrl.Result{RequeueAfter: time.Minute}, nil
+    }
+
+    func (r *BackupReconciler) SetupWithManager(mgr ctrl.Manager) error {
+    	return ctrl.NewControllerManagedBy(mgr).
+    		For(&backupv1alpha1.Backup{}).
+    		Complete(r)
+    }
+  config/crd/bases/acme.io_backups.yaml: |
+    apiVersion: apiextensions.k8s.io/v1
+    kind: CustomResourceDefinition
+    metadata:
+      name: backups.acme.io
+    spec:
+      group: acme.io
+      names:
+        kind: Backup
+        listKind: BackupList
+        plural: backups
+        singular: backup
+      scope: Namespaced
+      versions:
+        - name: v1alpha1
+          served: true
+          storage: true
+          subresources:
+            status: {}
+          schema:
+            openAPIV3Schema:
+              type: object
+              properties:
+                spec:
+                  type: object
+                  required: [schedule, claimName]
+                  properties:
+                    schedule:
+                      type: string
+                    claimName:
+                      type: string
+                    retain:
+                      type: integer
+  config/manager/manager.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: backup-operator-controller-manager
+      namespace: backup-operator-system
+    spec:
+      replicas: 1
+      selector:
+        matchLabels:
+          control-plane: controller-manager
+      template:
+        metadata:
+          labels:
+            control-plane: controller-manager
+        spec:
+          serviceAccountName: backup-operator-controller-manager
+          containers:
+            - name: manager
+              image: ghcr.io/acme/backup-operator:v0.5.0
+              args: ["--leader-elect"]
+              resources:
+                requests:
+                  cpu: 10m
+                  memory: 64Mi
+  Makefile: |
+    .RECIPEPREFIX = >
+
+    IMG ?= ghcr.io/acme/backup-operator:v0.5.0
+
+    manifests:
+    > controller-gen crd paths=./api/... output:crd:artifacts:config=config/crd/bases
+
+    run:
+    > go run ./cmd/main.go
+
+    docker-build:
+    > docker build -t $(IMG) .
+
+    deploy: manifests
+    > kubectl apply -f config/crd/bases && kubectl apply -f config/manager

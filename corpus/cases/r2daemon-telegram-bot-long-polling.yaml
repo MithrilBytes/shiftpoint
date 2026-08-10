@@ -1,0 +1,49 @@
+id: r2daemon-telegram-bot-long-polling
+origin: "A support bot for a Telegram group, built on python-telegram-bot and started with run_polling. Polling means Telegram never calls a URL of ours: the bot dials out and holds a long poll open forever. Answers come from a static table in the code, so there is nothing to store."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    python-telegram-bot==21.4
+    python-dotenv==1.0.1
+  bot.py: |
+    import os
+    from dotenv import load_dotenv
+    from telegram.ext import Application, CommandHandler, MessageHandler, filters
+    from answers import ANSWERS, best_match
+
+    load_dotenv()
+
+    async def start(update, context):
+        await update.message.reply_text("Ask me anything about the shipping API.")
+
+    async def reply(update, context):
+        await update.message.reply_text(best_match(update.message.text))
+
+    app = Application.builder().token(os.environ["TELEGRAM_TOKEN"]).build()
+    app.add_handler(CommandHandler("start", start))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, reply))
+    app.run_polling()
+  answers.py: |
+    ANSWERS = {
+        "rate limit": "600 requests a minute per key, burst of 60.",
+        "sandbox": "Point at api-sandbox.example.com with a test key.",
+        "webhook": "Retries are five times with exponential backoff.",
+    }
+
+    def best_match(text):
+        lowered = (text or "").lower()
+        for key, answer in ANSWERS.items():
+            if key in lowered:
+                return answer
+        return "No idea. Try /start for the topics I know."
+  Procfile: |
+    worker: python bot.py
+  .env.example: |
+    TELEGRAM_TOKEN=
+  README.md: |
+    # shipping-support-bot
+
+    Deliberately polling rather than webhooks so it works without a public
+    hostname. That does mean the process has to stay up.

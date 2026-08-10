@@ -1,0 +1,65 @@
+id: r2edge-static-site-contact-function
+origin: "An architecture practice's marketing site built by Eleventy, plus the one thing a static site cannot do for itself: a contact form. The form posts to a single Netlify function that hands the message to an email API and redirects. Nothing is stored, nothing stays alive between requests, and both halves sit inside one free plan."
+expect:
+  stage: static-site
+  flags: []
+files:
+  netlify.toml: |
+    [build]
+      command = "npx @11ty/eleventy"
+      publish = "_site"
+      functions = "netlify/functions"
+  package.json: |
+    {
+      "name": "haldane-studio-site",
+      "private": true,
+      "scripts": {
+        "build": "eleventy",
+        "dev": "eleventy --serve"
+      },
+      "dependencies": { "resend": "^3.2.0" },
+      "devDependencies": { "@11ty/eleventy": "^2.0.1" }
+    }
+  src/index.njk: |
+    ---
+    layout: base.njk
+    title: Haldane Studio
+    ---
+    <h1>Haldane Studio</h1>
+    <p>Houses, mostly. Glasgow and the west coast.</p>
+    <form method="POST" action="/.netlify/functions/contact">
+      <input name="email" type="email" required>
+      <textarea name="message" required></textarea>
+      <button>Send</button>
+    </form>
+  src/projects.njk: |
+    ---
+    layout: base.njk
+    title: Projects
+    ---
+    {% for project in collections.project %}
+      <article>
+        <h2>{{ project.data.title }}</h2>
+        {{ project.templateContent | safe }}
+      </article>
+    {% endfor %}
+  netlify/functions/contact.js: |
+    const { Resend } = require("resend");
+
+    exports.handler = async (event) => {
+      const { email, message } = Object.fromEntries(new URLSearchParams(event.body));
+      if (!email || !message) return { statusCode: 400, body: "missing field" };
+      await new Resend(process.env.RESEND_API_KEY).emails.send({
+        from: "site@haldane.example",
+        to: "studio@haldane.example",
+        reply_to: email,
+        subject: "Website enquiry",
+        text: message,
+      });
+      return { statusCode: 302, headers: { Location: "/thanks/" } };
+    };
+  README.md: |
+    # haldane.example
+
+    Eleventy builds `_site`. One function handles the contact form. There is
+    no database and nothing to keep running; enquiries arrive by email.

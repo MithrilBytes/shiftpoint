@@ -1,0 +1,57 @@
+id: r2cli-node-bin-cli
+origin: "An npm package that is only a command line tool: a bin field, a shebang, no main export. People run it with npx in a project directory or in CI to audit the licences of their dependencies. It reads node_modules and exits."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "licensescan",
+      "version": "3.2.0",
+      "description": "Report the licences of every installed dependency",
+      "bin": { "licensescan": "./bin/licensescan.js" },
+      "files": ["bin", "src"],
+      "license": "MIT",
+      "engines": { "node": ">=18" },
+      "dependencies": { "picocolors": "^1.0.0" }
+    }
+  bin/licensescan.js: |
+    #!/usr/bin/env node
+    import { scan } from "../src/scan.js";
+    import pc from "picocolors";
+
+    const allow = process.argv.includes("--allow")
+      ? process.argv[process.argv.indexOf("--allow") + 1].split(",")
+      : ["MIT", "Apache-2.0", "ISC", "BSD-3-Clause"];
+
+    let failed = 0;
+    for (const pkg of await scan(process.cwd())) {
+      const ok = allow.includes(pkg.license);
+      if (!ok) failed++;
+      console.log(`${ok ? pc.green("ok  ") : pc.red("deny")} ${pkg.name} ${pkg.license}`);
+    }
+    process.exit(failed > 0 ? 1 : 0);
+  src/scan.js: |
+    import { readdir, readFile } from "node:fs/promises";
+    import { join } from "node:path";
+
+    export async function scan(root) {
+      const dir = join(root, "node_modules");
+      const out = [];
+      for (const name of await readdir(dir)) {
+        if (name.startsWith(".")) continue;
+        const raw = await readFile(join(dir, name, "package.json"), "utf8");
+        const { license = "UNKNOWN" } = JSON.parse(raw);
+        out.push({ name, license });
+      }
+      return out;
+    }
+  README.md: |
+    # licensescan
+
+    ```
+    npx licensescan --allow MIT,Apache-2.0
+    ```
+
+    Exits non zero when a dependency uses a licence you did not allow, which is
+    what makes it useful as a CI step.

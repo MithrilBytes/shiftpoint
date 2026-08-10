@@ -1,0 +1,123 @@
+id: r2cli-go-migration-tool
+origin: "A database migration runner in the shape of goose or dbmate: a single Go binary that opens whatever database URL you hand it, applies numbered SQL files from a directory you name, and exits. It carries a Postgres driver because that is what it speaks, not because it owns a database. The only SQL in the repository is a test fixture."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/dbstep
+
+    go 1.22
+
+    require (
+        github.com/lib/pq v1.10.9
+        github.com/go-sql-driver/mysql v1.8.0
+    )
+  main.go: |
+    package main
+
+    import (
+        "flag"
+        "fmt"
+        "os"
+
+        "github.com/example/dbstep/migrate"
+    )
+
+    func main() {
+        dsn := flag.String("dsn", os.Getenv("DATABASE_URL"), "database the migrations run against")
+        dir := flag.String("dir", "migrations", "directory holding the numbered .sql files")
+        flag.Parse()
+
+        if *dsn == "" {
+            fmt.Fprintln(os.Stderr, "dbstep: no --dsn and no DATABASE_URL")
+            os.Exit(2)
+        }
+
+        var err error
+        switch flag.Arg(0) {
+        case "up":
+            err = migrate.Up(*dsn, *dir)
+        case "down":
+            err = migrate.Down(*dsn, *dir)
+        case "status":
+            err = migrate.Status(*dsn, *dir)
+        default:
+            fmt.Fprintln(os.Stderr, "usage: dbstep [up|down|status] --dsn URL --dir DIR")
+            os.Exit(2)
+        }
+        if err != nil {
+            fmt.Fprintln(os.Stderr, err)
+            os.Exit(1)
+        }
+    }
+  migrate/apply.go: |
+    package migrate
+
+    import (
+        "database/sql"
+        "os"
+        "path/filepath"
+        "sort"
+    )
+
+    func Up(dsn, dir string) error {
+        db, err := sql.Open(driverFor(dsn), dsn)
+        if err != nil {
+            return err
+        }
+        defer db.Close()
+
+        files, err := filepath.Glob(filepath.Join(dir, "*.sql"))
+        if err != nil {
+            return err
+        }
+        sort.Strings(files)
+
+        for _, f := range files {
+            applied, err := alreadyApplied(db, filepath.Base(f))
+            if err != nil || applied {
+                if err != nil {
+                    return err
+                }
+                continue
+            }
+            body, err := os.ReadFile(f)
+            if err != nil {
+                return err
+            }
+            if _, err := db.Exec(string(body)); err != nil {
+                return err
+            }
+            if err := record(db, filepath.Base(f)); err != nil {
+                return err
+            }
+        }
+        return nil
+    }
+  testdata/migrations/0001_create_widgets.sql: |
+    -- fixture used by migrate/apply_test.go, not a schema this repository owns
+    CREATE TABLE widgets (
+      id   serial PRIMARY KEY,
+      name text NOT NULL
+    );
+  migrate/apply_test.go: |
+    package migrate
+
+    import "testing"
+
+    func TestDriverForPostgresURL(t *testing.T) {
+        if got := driverFor("postgres://u:p@localhost:5432/app"); got != "postgres" {
+            t.Fatalf("got %q", got)
+        }
+    }
+  README.md: |
+    # dbstep
+
+    ```
+    go install github.com/example/dbstep@latest
+    dbstep up --dsn "$DATABASE_URL" --dir db/migrations
+    ```
+
+    Point it at a database you already have. It applies the files, prints what it
+    applied, and exits. Postgres and MySQL.

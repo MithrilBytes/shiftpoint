@@ -1,0 +1,83 @@
+id: r2mixed-monorepo-web-and-mobile
+origin: >-
+  A Turborepo for a small open source climbing log: a Next.js dashboard in
+  apps/web, an Expo React Native app in apps/mobile, and a shared typed client
+  in packages/api-client. The backend is a separate hosted service in another
+  repo. The mobile half ships through the app stores and is never hosted, so
+  the only hosting question in this repo is apps/web, which holds nothing open
+  and stores nothing.
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "sendlog",
+      "private": true,
+      "workspaces": ["apps/*", "packages/*"],
+      "devDependencies": { "turbo": "^2.0.9" }
+    }
+  turbo.json: |
+    {
+      "$schema": "https://turbo.build/schema.json",
+      "tasks": {
+        "build": { "dependsOn": ["^build"], "outputs": [".next/**", "dist/**"] },
+        "dev": { "cache": false, "persistent": true }
+      }
+    }
+  apps/web/package.json: |
+    {
+      "name": "@sendlog/web",
+      "private": true,
+      "scripts": { "dev": "next dev", "build": "next build", "start": "next start" },
+      "dependencies": {
+        "next": "14.2.5",
+        "react": "18.3.1",
+        "react-dom": "18.3.1",
+        "@sendlog/api-client": "*"
+      }
+    }
+  apps/web/app/page.tsx: |
+    import { listSessions } from "@sendlog/api-client";
+
+    export default async function Home() {
+      const sessions = await listSessions(process.env.API_BASE!);
+      return <ul>{sessions.map((s) => <li key={s.id}>{s.gym} {s.grade}</li>)}</ul>;
+    }
+  apps/mobile/package.json: |
+    {
+      "name": "@sendlog/mobile",
+      "private": true,
+      "scripts": { "start": "expo start", "build": "eas build" },
+      "dependencies": {
+        "expo": "~51.0.28",
+        "react": "18.3.1",
+        "react-native": "0.74.5",
+        "@sendlog/api-client": "*"
+      }
+    }
+  apps/mobile/app.json: |
+    {
+      "expo": {
+        "name": "SendLog",
+        "slug": "sendlog",
+        "version": "1.4.0",
+        "ios": { "bundleIdentifier": "dev.sendlog.app" },
+        "android": { "package": "dev.sendlog.app" }
+      }
+    }
+  packages/api-client/index.ts: |
+    export type Session = { id: string; gym: string; grade: string };
+
+    export async function listSessions(base: string): Promise<Session[]> {
+      const res = await fetch(`${base}/sessions`, { cache: "no-store" });
+      if (!res.ok) throw new Error(`api ${res.status}`);
+      return res.json();
+    }
+  README.md: |
+    # sendlog
+
+    A hobby project, MIT licensed, no accounts to sell and no billing anywhere.
+    `apps/web` is the dashboard and is the only thing that gets deployed from
+    this repo. `apps/mobile` goes to TestFlight and Play Console. The API it
+    both talks to lives in `sendlog/api`, a different repository.

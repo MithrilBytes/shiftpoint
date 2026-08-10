@@ -1,0 +1,66 @@
+id: r2stack-sinatra-request-inspector
+origin: >-
+  A classic modular Sinatra app: point curl or a misbehaving webhook sender at
+  it and it shows you exactly what arrived. Two routes, an ERB view, a rackup
+  file and puma. Nothing is written down, nothing is remembered between
+  requests, and there is no database anywhere in it.
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  Gemfile: |
+    source "https://rubygems.org"
+
+    gem "sinatra", "~> 4.0"
+    gem "rackup"
+    gem "puma"
+  config.ru: |
+    require "./app"
+
+    run Inspector
+  app.rb: |
+    require "sinatra/base"
+    require "json"
+
+    class Inspector < Sinatra::Base
+      get "/" do
+        erb :index, locals: { seen: describe(request) }
+      end
+
+      get "/json" do
+        content_type :json
+        JSON.pretty_generate(describe(request))
+      end
+
+      post "/*" do
+        content_type :json
+        JSON.pretty_generate(describe(request).merge(body: request.body.read))
+      end
+
+      private
+
+      def describe(request)
+        {
+          method: request.request_method,
+          path: request.path_info,
+          scheme: request.scheme,
+          ip: request.ip,
+          query: request.params,
+          headers: request.env.select { |k, _| k.start_with?("HTTP_") },
+        }
+      end
+    end
+  views/index.erb: |
+    <h1>What we saw</h1>
+    <dl>
+      <% seen[:headers].sort.each do |name, value| %>
+        <dt><%= name.sub("HTTP_", "").downcase.tr("_", "-") %></dt>
+        <dd><%= value %></dd>
+      <% end %>
+    </dl>
+    <p>From <%= seen[:ip] %> over <%= seen[:scheme] %>.</p>
+  README.md: |
+    # inspector
+
+    `bundle exec rackup`. Send it anything and it tells you what turned up.
+    Requests are not logged or stored; close the tab and it is gone.

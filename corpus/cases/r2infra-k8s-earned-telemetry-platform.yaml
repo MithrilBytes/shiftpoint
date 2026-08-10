@@ -1,0 +1,157 @@
+id: r2infra-k8s-earned-telemetry-platform
+origin: "A device telemetry platform: a public API, a high volume ingest service, and a worker that consumes a Kafka topic and writes rollups. Three long lived processes, autoscaling on ingest, disruption budgets, and a topic that keeps flowing whether or not anyone is making requests. The cluster is doing work the shape of the system asks for."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  go.mod: |
+    module github.com/acme/telemetry-platform
+
+    go 1.22
+
+    require (
+    	github.com/go-chi/chi/v5 v5.0.12
+    	github.com/jackc/pgx/v5 v5.6.0
+    	github.com/twmb/franz-go v1.17.0
+    )
+  cmd/api/main.go: |
+    package main
+
+    import (
+    	"net/http"
+
+    	"github.com/go-chi/chi/v5"
+    )
+
+    func main() {
+    	r := chi.NewRouter()
+    	r.Get("/v1/devices/{id}/rollups", serveRollups)
+    	r.Get("/v1/fleets/{id}/summary", serveFleetSummary)
+    	http.ListenAndServe(":8080", r)
+    }
+  cmd/ingest/main.go: |
+    package main
+
+    import (
+    	"net/http"
+
+    	"github.com/twmb/franz-go/pkg/kgo"
+    )
+
+    // Accepts batched device readings over HTTP and produces them to Kafka.
+    // Sustained tens of thousands of readings a second across the fleet.
+    func main() {
+    	producer, err := kgo.NewClient(kgo.SeedBrokers(brokers()...))
+    	if err != nil {
+    		panic(err)
+    	}
+    	defer producer.Close()
+
+    	http.HandleFunc("/v1/ingest", batchHandler(producer))
+    	http.ListenAndServe(":8081", nil)
+    }
+  cmd/worker/main.go: |
+    package main
+
+    import (
+    	"context"
+
+    	"github.com/twmb/franz-go/pkg/kgo"
+    )
+
+    // Consumes the readings topic forever, folds each reading into the
+    // per device rollups, and commits offsets. There is no request that
+    // starts this and no request that ends it.
+    func main() {
+    	client, err := kgo.NewClient(
+    		kgo.SeedBrokers(brokers()...),
+    		kgo.ConsumeTopics("device.readings"),
+    		kgo.ConsumerGroup("rollup-worker"),
+    	)
+    	if err != nil {
+    		panic(err)
+    	}
+
+    	ctx := context.Background()
+    	for {
+    		fetches := client.PollFetches(ctx)
+    		fetches.EachRecord(foldReading)
+    		client.CommitUncommittedOffsets(ctx)
+    	}
+    }
+  k8s/api.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: telemetry-api
+    spec:
+      replicas: 4
+      selector:
+        matchLabels:
+          app: telemetry-api
+      template:
+        metadata:
+          labels:
+            app: telemetry-api
+        spec:
+          containers:
+            - name: api
+              image: ghcr.io/acme/telemetry-api:9.2.1
+              resources:
+                requests:
+                  cpu: "500m"
+                  memory: 512Mi
+              ports:
+                - containerPort: 8080
+    ---
+    apiVersion: policy/v1
+    kind: PodDisruptionBudget
+    metadata:
+      name: telemetry-api
+    spec:
+      minAvailable: 3
+      selector:
+        matchLabels:
+          app: telemetry-api
+  k8s/worker.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: rollup-worker
+    spec:
+      replicas: 12
+      selector:
+        matchLabels:
+          app: rollup-worker
+      template:
+        metadata:
+          labels:
+            app: rollup-worker
+        spec:
+          terminationGracePeriodSeconds: 90
+          containers:
+            - name: worker
+              image: ghcr.io/acme/rollup-worker:9.2.1
+              resources:
+                requests:
+                  cpu: "1"
+                  memory: 2Gi
+  k8s/hpa.yaml: |
+    apiVersion: autoscaling/v2
+    kind: HorizontalPodAutoscaler
+    metadata:
+      name: telemetry-ingest
+    spec:
+      scaleTargetRef:
+        apiVersion: apps/v1
+        kind: Deployment
+        name: telemetry-ingest
+      minReplicas: 6
+      maxReplicas: 60
+      metrics:
+        - type: Resource
+          resource:
+            name: cpu
+            target:
+              type: Utilization
+              averageUtilization: 65

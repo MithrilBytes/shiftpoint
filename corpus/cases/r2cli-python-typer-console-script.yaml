@@ -1,0 +1,59 @@
+id: r2cli-python-typer-console-script
+origin: "A pip installable photo organiser: a typer app declared through the classic setup.py entry_points console_scripts hook. It walks a directory the user names, reads EXIF dates, and moves files. The only machine it touches is the one it is installed on."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  setup.py: |
+    from setuptools import setup, find_packages
+
+    setup(
+        name="exifsort",
+        version="2.1.0",
+        description="Sort photographs into folders by the date in their EXIF data",
+        packages=find_packages(),
+        python_requires=">=3.9",
+        install_requires=["typer>=0.12", "pillow>=10.0"],
+        entry_points={"console_scripts": ["exifsort = exifsort.cli:app"]},
+    )
+  exifsort/cli.py: |
+    from pathlib import Path
+
+    import typer
+
+    from .scan import plan_moves
+
+    app = typer.Typer(help="Sort photographs by EXIF date.")
+
+    @app.command()
+    def run(source: Path, dest: Path, dry_run: bool = True):
+        """Move every photo under SOURCE into YYYY/MM folders under DEST."""
+        for src, target in plan_moves(source, dest):
+            typer.echo(f"{src} -> {target}")
+            if not dry_run:
+                target.parent.mkdir(parents=True, exist_ok=True)
+                src.rename(target)
+  exifsort/scan.py: |
+    from PIL import Image
+
+    def plan_moves(source, dest):
+        for path in sorted(source.rglob("*.jpg")):
+            taken = Image.open(path).getexif().get(36867)
+            if not taken:
+                continue
+            year, month = taken.split(":")[0], taken.split(":")[1]
+            yield path, dest / year / month / path.name
+  tests/test_scan.py: |
+    from exifsort.scan import plan_moves
+
+    def test_yields_nothing_for_an_empty_tree(tmp_path):
+        assert list(plan_moves(tmp_path, tmp_path / "out")) == []
+  README.md: |
+    # exifsort
+
+    ```
+    pipx install exifsort
+    exifsort ~/Pictures/dump ~/Pictures/sorted --no-dry-run
+    ```
+
+    Runs once, prints what it did, exits.

@@ -1,0 +1,86 @@
+id: r2mixed-design-system-storybook
+origin: >-
+  A React design system published to npm as `@northstar/ui`, with Storybook in
+  the same repo as its documentation. `build-storybook` produces a static site
+  that CI pushes to GitHub Pages for designers to browse, so the repo contains
+  something that builds to files, but what is shipped is the package that four
+  other repositories install.
+expect:
+  stage: library
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "@northstar/ui",
+      "version": "3.2.1",
+      "type": "module",
+      "main": "./dist/index.cjs",
+      "module": "./dist/index.js",
+      "types": "./dist/index.d.ts",
+      "files": ["dist"],
+      "scripts": {
+        "build": "tsup",
+        "storybook": "storybook dev -p 6006",
+        "build-storybook": "storybook build",
+        "prepublishOnly": "npm run build"
+      },
+      "peerDependencies": { "react": ">=18" },
+      "devDependencies": { "tsup": "^8.1.0", "storybook": "^8.1.11", "@storybook/react-vite": "^8.1.11" },
+      "publishConfig": { "access": "restricted" }
+    }
+  src/index.ts: |
+    export { Button } from "./Button";
+    export { Card } from "./Card";
+    export { tokens } from "./tokens";
+  src/Button.tsx: |
+    import type { ButtonHTMLAttributes } from "react";
+
+    type Props = ButtonHTMLAttributes<HTMLButtonElement> & {
+      variant?: "primary" | "ghost" | "danger";
+    };
+
+    export function Button({ variant = "primary", ...rest }: Props) {
+      return <button className={`ns-btn ns-btn--${variant}`} {...rest} />;
+    }
+  src/tokens.ts: |
+    export const tokens = {
+      space: [0, 4, 8, 12, 16, 24, 32],
+      radius: { sm: "2px", md: "6px", pill: "999px" },
+      color: { ink: "#101828", accent: "#3b5bdb", danger: "#c92a2a" },
+    };
+  src/Button.stories.tsx: |
+    import type { Meta, StoryObj } from "@storybook/react";
+    import { Button } from "./Button";
+
+    const meta: Meta<typeof Button> = { component: Button, title: "Core/Button" };
+    export default meta;
+
+    export const Primary: StoryObj<typeof Button> = { args: { children: "Save" } };
+    export const Danger: StoryObj<typeof Button> = { args: { variant: "danger", children: "Delete" } };
+  .storybook/main.ts: |
+    import type { StorybookConfig } from "@storybook/react-vite";
+
+    const config: StorybookConfig = {
+      stories: ["../src/**/*.stories.tsx"],
+      framework: "@storybook/react-vite",
+    };
+    export default config;
+  tsup.config.ts: |
+    import { defineConfig } from "tsup";
+
+    export default defineConfig({
+      entry: ["src/index.ts"],
+      format: ["esm", "cjs"],
+      dts: true,
+      external: ["react"],
+    });
+  README.md: |
+    # @northstar/ui
+
+    ```bash
+    npm i @northstar/ui
+    ```
+
+    Published from `main` on every tag. The Storybook is reference material for
+    designers and reviewers; it lands on GitHub Pages after each release and is
+    not where the components are used.

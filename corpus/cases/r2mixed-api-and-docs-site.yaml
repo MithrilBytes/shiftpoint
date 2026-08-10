@@ -1,0 +1,80 @@
+id: r2mixed-api-and-docs-site
+origin: >-
+  A paid image transformation API with its public documentation site in the
+  same repo. `api/` is a stateless Express service that fetches a source image,
+  resizes it with sharp and returns it; API keys are signed tokens so there is
+  no database, and usage is metered straight to Stripe. `docs/` is a Docusaurus
+  site with the pricing page. Two artefacts, one of them plainly a product
+  somebody pays for.
+expect:
+  stage: commercial-app-on-managed-hosting
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "pixelpipe",
+      "private": true,
+      "workspaces": ["api", "docs"]
+    }
+  api/package.json: |
+    {
+      "name": "@pixelpipe/api",
+      "scripts": { "start": "node server.js" },
+      "dependencies": {
+        "express": "^4.19.2",
+        "sharp": "^0.33.4",
+        "stripe": "^16.2.0",
+        "jose": "^5.6.3"
+      }
+    }
+  api/server.js: |
+    const express = require("express");
+    const sharp = require("sharp");
+    const { jwtVerify } = require("jose");
+    const stripe = require("stripe")(process.env.STRIPE_SECRET_KEY);
+
+    const app = express();
+    const KEY = new TextEncoder().encode(process.env.SIGNING_SECRET);
+
+    app.get("/v1/resize", async (req, res) => {
+      const { payload } = await jwtVerify(req.header("x-api-key"), KEY);
+      const src = await fetch(req.query.url).then((r) => r.arrayBuffer());
+      const out = await sharp(Buffer.from(src)).resize(Number(req.query.w)).webp().toBuffer();
+      await stripe.billing.meterEvents.create({
+        event_name: "image_transform",
+        payload: { stripe_customer_id: payload.cus, value: "1" },
+      });
+      res.type("image/webp").send(out);
+    });
+
+    app.listen(process.env.PORT || 3000);
+  docs/package.json: |
+    {
+      "name": "@pixelpipe/docs",
+      "scripts": { "build": "docusaurus build", "start": "docusaurus start" },
+      "dependencies": { "@docusaurus/core": "3.4.0", "@docusaurus/preset-classic": "3.4.0" }
+    }
+  docs/docusaurus.config.js: |
+    module.exports = {
+      title: "PixelPipe",
+      url: "https://pixelpipe.io",
+      baseUrl: "/",
+      presets: [["classic", { docs: { routeBasePath: "/" } }]],
+    };
+  docs/docs/pricing.md: |
+    # Pricing
+
+    | Plan | Price | Included transforms |
+    | --- | --- | --- |
+    | Starter | $29/mo | 50,000 |
+    | Pro | $99/mo | 250,000 |
+    | Scale | $399/mo | 1,500,000 |
+
+    Overage is billed at $0.60 per thousand. Cancel any time from the billing
+    portal.
+  README.md: |
+    # pixelpipe
+
+    `api/` is the product our customers call. `docs/` is the marketing and
+    reference site at pixelpipe.io. Billing runs through Stripe on live keys.
+    The API keeps nothing: keys are signed tokens and there is no database.

@@ -1,0 +1,76 @@
+id: r2edge-android-app-no-backend
+origin: "A Kotlin shift tracker for Android. Everything lives on the phone in Room, there is no INTERNET permission, and it ships through the Play Store. The language and toolchain are unmistakable, but there is no server in this product and no stage in the taxonomy for a store app, so the honest answer is the language and nothing more."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  settings.gradle.kts: |
+    rootProject.name = "shifts"
+    include(":app")
+  app/build.gradle.kts: |
+    plugins {
+      id("com.android.application")
+      kotlin("android")
+      id("com.google.devtools.ksp")
+    }
+
+    android {
+      namespace = "org.example.shifts"
+      compileSdk = 34
+      defaultConfig {
+        minSdk = 26
+        targetSdk = 34
+        versionCode = 12
+        versionName = "1.4.0"
+      }
+    }
+
+    dependencies {
+      implementation("androidx.activity:activity-compose:1.8.2")
+      implementation("androidx.room:room-runtime:2.6.1")
+      ksp("androidx.room:room-compiler:2.6.1")
+    }
+  app/src/main/AndroidManifest.xml: |
+    <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+      <application android:label="Shifts" android:theme="@style/Theme.Shifts">
+        <activity android:name=".MainActivity" android:exported="true">
+          <intent-filter>
+            <action android:name="android.intent.action.MAIN"/>
+            <category android:name="android.intent.category.LAUNCHER"/>
+          </intent-filter>
+        </activity>
+      </application>
+    </manifest>
+  app/src/main/java/org/example/shifts/MainActivity.kt: |
+    package org.example.shifts
+
+    import android.os.Bundle
+    import androidx.activity.ComponentActivity
+    import androidx.activity.compose.setContent
+
+    class MainActivity : ComponentActivity() {
+      override fun onCreate(savedInstanceState: Bundle?) {
+        super.onCreate(savedInstanceState)
+        setContent { ShiftList(db.shifts()) }
+      }
+    }
+  app/src/main/java/org/example/shifts/ShiftDao.kt: |
+    package org.example.shifts
+
+    import androidx.room.Dao
+    import androidx.room.Insert
+    import androidx.room.Query
+
+    @Dao
+    interface ShiftDao {
+      @Query("SELECT * FROM shift ORDER BY startedAt DESC")
+      fun all(): List<Shift>
+
+      @Insert
+      fun add(shift: Shift)
+    }
+  README.md: |
+    # Shifts
+
+    Log the hours you worked. Everything stays on the phone: no account, no
+    sync, no network permission requested. Distributed through Play only.

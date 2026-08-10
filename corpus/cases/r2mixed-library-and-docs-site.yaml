@@ -1,0 +1,78 @@
+id: r2mixed-library-and-docs-site
+origin: >-
+  A small Python package published to PyPI that keeps its documentation site in
+  the same repo: MkDocs sources under `docs/`, built and pushed to GitHub Pages
+  by CI. The repo therefore contains something that builds to static files, but
+  the thing being shipped is the package people pip install.
+expect:
+  stage: library
+  flags: []
+files:
+  pyproject.toml: |
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+
+    [project]
+    name = "tzwindow"
+    version = "0.4.2"
+    description = "Business hour windows across time zones"
+    requires-python = ">=3.9"
+    dependencies = ["tzdata>=2024.1"]
+
+    [project.urls]
+    Documentation = "https://tzwindow.readthedocs.io"
+  src/tzwindow/__init__.py: |
+    from datetime import datetime, time
+    from zoneinfo import ZoneInfo
+
+    def is_open(when: datetime, zone: str, opens: time, closes: time) -> bool:
+        local = when.astimezone(ZoneInfo(zone))
+        return opens <= local.time() < closes
+
+    def next_open(when: datetime, zone: str, opens: time) -> datetime:
+        local = when.astimezone(ZoneInfo(zone))
+        candidate = local.replace(hour=opens.hour, minute=opens.minute, second=0)
+        return candidate if candidate > local else candidate.replace(day=local.day + 1)
+  tests/test_windows.py: |
+    from datetime import datetime, time
+    from tzwindow import is_open
+
+    def test_closed_before_opening():
+        when = datetime.fromisoformat("2024-05-02T06:30:00+00:00")
+        assert not is_open(when, "Europe/Berlin", time(9, 0), time(17, 0))
+  mkdocs.yml: |
+    site_name: tzwindow
+    theme:
+      name: material
+    nav:
+      - Home: index.md
+      - API: api.md
+  docs/index.md: |
+    # tzwindow
+
+    ```bash
+    pip install tzwindow
+    ```
+
+    Ask whether a moment falls inside somebody else's working day without
+    reimplementing the calendar arithmetic every time.
+  docs/api.md: |
+    # API
+
+    ## `is_open(when, zone, opens, closes)`
+
+    True when `when`, converted into `zone`, falls in the half open interval
+    `[opens, closes)`.
+  .github/workflows/docs.yml: |
+    name: docs
+    on:
+      push:
+        branches: [main]
+    jobs:
+      deploy:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: pip install mkdocs-material
+          - run: mkdocs gh-deploy --force

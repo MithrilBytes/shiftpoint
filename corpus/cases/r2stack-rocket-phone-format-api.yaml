@@ -1,0 +1,77 @@
+id: r2stack-rocket-phone-format-api
+origin: >-
+  A small open source Rocket service that parses and reformats telephone
+  numbers. Everything it answers is computed from the query string by a library
+  call: no database, no files, no state carried between requests, and a binary
+  that idles at a few megabytes.
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "phonefmt"
+    version = "0.2.1"
+    edition = "2021"
+    license = "MIT"
+
+    [dependencies]
+    rocket = { version = "0.5", features = ["json"] }
+    phonenumber = "0.3"
+    serde = { version = "1", features = ["derive"] }
+  src/main.rs: |
+    #[macro_use]
+    extern crate rocket;
+
+    use rocket::serde::json::Json;
+    use rocket::serde::Serialize;
+
+    #[derive(Serialize)]
+    #[serde(crate = "rocket::serde")]
+    struct Parsed {
+        valid: bool,
+        e164: Option<String>,
+        national: Option<String>,
+        kind: Option<String>,
+    }
+
+    #[get("/parse?<number>&<region>")]
+    fn parse(number: &str, region: &str) -> Json<Parsed> {
+        let country = region.parse().ok();
+        match phonenumber::parse(country, number) {
+            Ok(n) if phonenumber::is_valid(&n) => Json(Parsed {
+                valid: true,
+                e164: Some(n.format().mode(phonenumber::Mode::E164).to_string()),
+                national: Some(n.format().mode(phonenumber::Mode::National).to_string()),
+                kind: Some(format!("{:?}", n.number_type(&Default::default()))),
+            }),
+            _ => Json(Parsed { valid: false, e164: None, national: None, kind: None }),
+        }
+    }
+
+    #[launch]
+    fn rocket() -> _ {
+        rocket::build().mount("/", routes![parse])
+    }
+  Rocket.toml: |
+    [default]
+    address = "0.0.0.0"
+    port = 8000
+    log_level = "critical"
+  Dockerfile: |
+    FROM rust:1.79-slim AS build
+    WORKDIR /src
+    COPY . .
+    RUN cargo build --release
+
+    FROM debian:bookworm-slim
+    COPY --from=build /src/target/release/phonefmt /usr/local/bin/phonefmt
+    COPY Rocket.toml /Rocket.toml
+    CMD ["phonefmt"]
+  README.md: |
+    # phonefmt
+
+    `GET /parse?number=07700900123&region=GB`
+
+    A thin HTTP wrapper around the `phonenumber` crate. It keeps nothing, so
+    you can run one of these or twenty and it makes no difference.

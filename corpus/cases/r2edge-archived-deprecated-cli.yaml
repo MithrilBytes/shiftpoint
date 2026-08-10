@@ -1,0 +1,59 @@
+id: r2edge-archived-deprecated-cli
+origin: "A small Python command line tool for looking at CSV files, archived in 2023 behind a deprecation banner pointing at its successor. The code is untouched and still installs from PyPI; only the maintenance stopped. The banner is the only thing that changed."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  README.md: |
+    # csvpeek
+
+    > **This repository is archived.** csvpeek is no longer maintained and
+    > will get no further releases, including for security issues. Use `xsv`
+    > or `duckdb` instead. Archived 2023-11-14.
+
+    ```
+    pip install csvpeek
+    csvpeek head sales.csv --cols date,total
+    ```
+  pyproject.toml: |
+    [project]
+    name = "csvpeek"
+    version = "0.9.3"
+    description = "Look at a CSV without opening a spreadsheet"
+    requires-python = ">=3.8"
+    dependencies = ["click>=8.0"]
+
+    [project.scripts]
+    csvpeek = "csvpeek.cli:main"
+  csvpeek/cli.py: |
+    import csv
+    import click
+
+
+    @click.group()
+    def main():
+        """Look at a CSV without opening a spreadsheet."""
+
+
+    @main.command()
+    @click.argument("path")
+    @click.option("--cols", default="")
+    def head(path, cols):
+        wanted = [c for c in cols.split(",") if c]
+        with open(path, newline="") as fh:
+            for i, row in enumerate(csv.DictReader(fh)):
+                if i >= 10:
+                    break
+                click.echo({k: row[k] for k in wanted} if wanted else row)
+  csvpeek/__init__.py: |
+    __version__ = "0.9.3"
+  tests/test_head.py: |
+    from click.testing import CliRunner
+
+    from csvpeek.cli import main
+
+
+    def test_head_runs(tmp_path):
+        path = tmp_path / "a.csv"
+        path.write_text("a,b\n1,2\n")
+        assert CliRunner().invoke(main, ["head", str(path)]).exit_code == 0

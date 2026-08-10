@@ -1,0 +1,108 @@
+id: r2stack-go-echo-postcode-lookup
+origin: >-
+  A Go service on echo that answers postcode lookups. There is no database:
+  the whole of the Ordnance Survey open postcode file is parsed into a map at
+  startup and served from memory. That costs about forty seconds and a few
+  hundred megabytes before the first request can be answered, so the process
+  has to be started once and left running on a box big enough to hold it.
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/oscroft/postcode-lookup
+
+    go 1.22
+
+    require github.com/labstack/echo/v4 v4.12.0
+  main.go: |
+    package main
+
+    import (
+    	"log"
+    	"net/http"
+    	"strings"
+
+    	"github.com/labstack/echo/v4"
+    )
+
+    func main() {
+    	index, err := loadIndex("data/postcodes.csv")
+    	if err != nil {
+    		log.Fatal(err)
+    	}
+    	log.Printf("loaded %d postcodes", len(index))
+
+    	e := echo.New()
+
+    	e.GET("/lookup/:postcode", func(c echo.Context) error {
+    		key := strings.ToUpper(strings.ReplaceAll(c.Param("postcode"), " ", ""))
+    		point, ok := index[key]
+    		if !ok {
+    			return c.JSON(http.StatusNotFound, echo.Map{"error": "no such postcode"})
+    		}
+    		return c.JSON(http.StatusOK, point)
+    	})
+
+    	e.GET("/healthz", func(c echo.Context) error {
+    		return c.String(http.StatusOK, "ok")
+    	})
+
+    	e.Logger.Fatal(e.Start(":8080"))
+    }
+  index.go: |
+    package main
+
+    import (
+    	"encoding/csv"
+    	"os"
+    	"strconv"
+    )
+
+    type Point struct {
+    	Lat  float64 `json:"lat"`
+    	Lon  float64 `json:"lon"`
+    	Ward string  `json:"ward"`
+    }
+
+    // loadIndex reads all 1.8 million rows into memory once, at startup.
+    func loadIndex(path string) (map[string]Point, error) {
+    	f, err := os.Open(path)
+    	if err != nil {
+    		return nil, err
+    	}
+    	defer f.Close()
+
+    	index := make(map[string]Point, 1_800_000)
+    	r := csv.NewReader(f)
+    	r.ReuseRecord = true
+    	for {
+    		row, err := r.Read()
+    		if err != nil {
+    			break
+    		}
+    		lat, _ := strconv.ParseFloat(row[1], 64)
+    		lon, _ := strconv.ParseFloat(row[2], 64)
+    		index[row[0]] = Point{Lat: lat, Lon: lon, Ward: row[3]}
+    	}
+    	return index, nil
+    }
+  Dockerfile: |
+    FROM golang:1.22-alpine AS build
+    WORKDIR /src
+    COPY . .
+    RUN go build -o /postcode-lookup .
+
+    FROM alpine:3.20
+    COPY --from=build /postcode-lookup /postcode-lookup
+    COPY data/postcodes.csv /data/postcodes.csv
+    WORKDIR /
+    CMD ["/postcode-lookup"]
+  README.md: |
+    # postcode-lookup
+
+    Postcode to coordinates, from the open data file that ships in the image.
+
+    The index is built in memory at startup: reckon on 40 seconds before it
+    answers and around 400 MB resident afterwards. Do not let anything stop and
+    start it per request.

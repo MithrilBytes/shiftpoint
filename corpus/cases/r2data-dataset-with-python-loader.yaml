@@ -1,0 +1,87 @@
+id: r2data-dataset-with-python-loader
+origin: "A published dataset that ships as a pip package: the CSVs travel inside the wheel and a thin loader hands them back as data frames, so a citation becomes one import. The repository is a thing people install from PyPI, not a thing anybody runs on a server."
+expect:
+  stage: library
+  flags: []
+files:
+  pyproject.toml: |
+    [build-system]
+    requires = ["hatchling"]
+    build-backend = "hatchling.build"
+
+    [project]
+    name = "gullwatch-data"
+    version = "2.1.0"
+    description = "Herring gull colony counts, 1986 to 2024, as tidy frames"
+    requires-python = ">=3.9"
+    dependencies = ["pandas>=2.0"]
+    license = { text = "CC-BY-4.0" }
+
+    [tool.hatch.build.targets.wheel]
+    packages = ["src/gullwatch"]
+
+    [tool.hatch.build.targets.wheel.force-include]
+    "data" = "gullwatch/data"
+  src/gullwatch/__init__.py: |
+    from gullwatch.loader import load_colonies, load_counts
+
+    __all__ = ["load_colonies", "load_counts"]
+    __version__ = "2.1.0"
+  src/gullwatch/loader.py: |
+    from importlib import resources
+
+    import pandas as pd
+
+    def _read(name: str) -> pd.DataFrame:
+        with resources.files("gullwatch.data").joinpath(name).open() as handle:
+            return pd.read_csv(handle)
+
+    def load_colonies() -> pd.DataFrame:
+        """Colony locations and protection status, one row per colony."""
+        return _read("colonies.csv")
+
+    def load_counts(since: int | None = None) -> pd.DataFrame:
+        """Apparently occupied nests by colony and year."""
+        counts = _read("counts.csv")
+        return counts if since is None else counts[counts["year"] >= since]
+  data/colonies.csv: |
+    colony_id,name,latitude,longitude,protected
+    STH-01,South Stack,53.3057,-4.6970,true
+    BEM-02,Bempton Cliffs,54.1466,-0.1667,true
+  data/counts.csv: |
+    colony_id,year,nests,method
+    STH-01,1986,1420,ground
+    STH-01,2024,318,drone
+    BEM-02,2024,9107,drone
+  tests/test_loader.py: |
+    from gullwatch import load_counts
+
+    def test_since_filters():
+        assert load_counts(since=2000)["year"].min() >= 2000
+  .github/workflows/publish.yml: |
+    name: publish
+    on:
+      release:
+        types: [published]
+    jobs:
+      pypi:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: pipx run build
+          - run: pipx run twine upload dist/*
+  README.md: |
+    # gullwatch-data
+
+    ```
+    pip install gullwatch-data
+    ```
+
+    ```python
+    from gullwatch import load_counts
+    counts = load_counts(since=2000)
+    ```
+
+    The data is 3.2 MB and ships inside the wheel, so there is nothing to
+    download at import time and no service behind it. Cite the 2024 paper if
+    you use it.

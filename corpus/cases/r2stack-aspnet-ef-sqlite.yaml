@@ -1,0 +1,92 @@
+id: r2stack-aspnet-ef-sqlite
+origin: >-
+  A small ASP.NET Core minimal API for meeting room bookings in one office,
+  using EF Core with the SQLite provider. The connection string is a path on
+  the machine's disk and the app migrates the file open at startup. It is one
+  process with one file beside it: lose the disk and you lose the bookings.
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  Rooms.csproj: |
+    <Project Sdk="Microsoft.NET.Sdk.Web">
+      <PropertyGroup>
+        <TargetFramework>net8.0</TargetFramework>
+        <Nullable>enable</Nullable>
+        <ImplicitUsings>enable</ImplicitUsings>
+      </PropertyGroup>
+      <ItemGroup>
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="8.0.7" />
+        <PackageReference Include="Microsoft.EntityFrameworkCore.Design" Version="8.0.7" />
+      </ItemGroup>
+    </Project>
+  Program.cs: |
+    using Microsoft.EntityFrameworkCore;
+    using Rooms.Data;
+    using Rooms.Models;
+
+    var builder = WebApplication.CreateBuilder(args);
+    builder.Services.AddDbContext<BookingContext>(o =>
+        o.UseSqlite(builder.Configuration.GetConnectionString("Default")));
+
+    var app = builder.Build();
+
+    using (var scope = app.Services.CreateScope())
+    {
+        scope.ServiceProvider.GetRequiredService<BookingContext>().Database.Migrate();
+    }
+
+    app.MapGet("/bookings", (BookingContext db) =>
+        db.Bookings.OrderBy(b => b.StartsAt).ToList());
+
+    app.MapPost("/bookings", (BookingContext db, Booking booking) =>
+    {
+        db.Bookings.Add(booking);
+        db.SaveChanges();
+        return Results.Created($"/bookings/{booking.Id}", booking);
+    });
+
+    app.Run();
+  appsettings.json: |
+    {
+      "ConnectionStrings": {
+        "Default": "Data Source=/var/lib/rooms/rooms.db"
+      },
+      "Logging": {
+        "LogLevel": { "Default": "Information" }
+      }
+    }
+  Data/BookingContext.cs: |
+    using Microsoft.EntityFrameworkCore;
+    using Rooms.Models;
+
+    namespace Rooms.Data;
+
+    public class BookingContext : DbContext
+    {
+        public BookingContext(DbContextOptions<BookingContext> options) : base(options) { }
+
+        public DbSet<Booking> Bookings => Set<Booking>();
+
+        protected override void OnModelCreating(ModelBuilder b)
+        {
+            b.Entity<Booking>().HasIndex(x => new { x.Room, x.StartsAt }).IsUnique();
+        }
+    }
+  Models/Booking.cs: |
+    namespace Rooms.Models;
+
+    public class Booking
+    {
+        public int Id { get; set; }
+        public string Room { get; set; } = "";
+        public string BookedBy { get; set; } = "";
+        public DateTime StartsAt { get; set; }
+        public int Minutes { get; set; }
+    }
+  README.md: |
+    # rooms
+
+    Meeting rooms for the Fenchurch Street office. `dotnet run` on the little
+    box in the comms cupboard. The database is `rooms.db` on that machine's
+    disk and is picked up by the nightly volume snapshot.

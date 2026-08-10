@@ -1,0 +1,135 @@
+id: r2daemon-game-server-postgres-accounts
+origin: "The authoritative server for a small persistent world game. Players hold a TCP session for the length of a session, a fixed tick applies queued commands whether or not anyone acted, and character rows and inventories live in Postgres so a player who logs back in tomorrow finds their stuff."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  go.mod: |
+    module github.com/tidepool/realm
+
+    go 1.22
+
+    require github.com/jackc/pgx/v5 v5.6.0
+  main.go: |
+    package main
+
+    import (
+        "context"
+        "log"
+        "net"
+        "os"
+
+        "github.com/jackc/pgx/v5/pgxpool"
+    )
+
+    func main() {
+        pool, err := pgxpool.New(context.Background(), os.Getenv("DATABASE_URL"))
+        if err != nil {
+            log.Fatal(err)
+        }
+
+        world := NewWorld(pool)
+        go world.Tick()
+
+        listener, err := net.Listen("tcp", ":7777")
+        if err != nil {
+            log.Fatal(err)
+        }
+        for {
+            conn, err := listener.Accept()
+            if err != nil {
+                continue
+            }
+            go world.Serve(conn)
+        }
+    }
+  world.go: |
+    package main
+
+    import (
+        "bufio"
+        "net"
+        "sync"
+        "time"
+
+        "github.com/jackc/pgx/v5/pgxpool"
+    )
+
+    type World struct {
+        mu      sync.Mutex
+        players map[string]*Player
+        pool    *pgxpool.Pool
+    }
+
+    func NewWorld(pool *pgxpool.Pool) *World {
+        return &World{players: map[string]*Player{}, pool: pool}
+    }
+
+    func (w *World) Tick() {
+        for range time.Tick(100 * time.Millisecond) {
+            w.mu.Lock()
+            for _, p := range w.players {
+                p.Apply()
+            }
+            w.mu.Unlock()
+        }
+    }
+
+    func (w *World) Serve(conn net.Conn) {
+        defer conn.Close()
+        p, err := w.Login(conn)
+        if err != nil {
+            return
+        }
+        scanner := bufio.NewScanner(conn)
+        for scanner.Scan() {
+            p.Queue(scanner.Text())
+        }
+        w.Save(p)
+    }
+  player.go: |
+    package main
+
+    import "context"
+
+    type Player struct {
+        CharacterID int64
+        Room        string
+        Inventory   []string
+        pending     []string
+    }
+
+    func (p *Player) Queue(command string) { p.pending = append(p.pending, command) }
+
+    func (p *Player) Apply() {
+        for _, command := range p.pending {
+            p.Room = resolveMove(p.Room, command)
+        }
+        p.pending = nil
+    }
+
+    func (w *World) Save(p *Player) {
+        w.pool.Exec(context.Background(),
+            "UPDATE characters SET room = $1, inventory = $2 WHERE id = $3",
+            p.Room, p.Inventory, p.CharacterID)
+    }
+  schema.sql: |
+    CREATE TABLE accounts (
+      id bigserial PRIMARY KEY,
+      email text UNIQUE NOT NULL,
+      password_hash text NOT NULL
+    );
+
+    CREATE TABLE characters (
+      id bigserial PRIMARY KEY,
+      account_id bigint REFERENCES accounts(id),
+      name text UNIQUE NOT NULL,
+      room text NOT NULL DEFAULT 'harbour',
+      inventory text[] NOT NULL DEFAULT '{}'
+    );
+  README.md: |
+    # realm
+
+    Listens on 7777, ticks at 10hz. The tick runs regardless of traffic and
+    every connected player holds a socket, so this is not something that can
+    sleep between requests. Characters persist in Postgres.

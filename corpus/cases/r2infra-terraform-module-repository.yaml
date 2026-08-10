@@ -1,0 +1,123 @@
+id: r2infra-terraform-module-repository
+origin: "A reusable Terraform module published to the public registry, the kind named terraform-aws-<thing>. It declares variables, resources and outputs, ships an example, and is consumed by a `module` block in someone else's root configuration. It stands up nothing on its own and there is no application in it."
+expect:
+  stage: library
+  flags: []
+files:
+  README.md: |
+    # terraform-aws-log-bucket
+
+    An S3 bucket for log delivery: versioned, encrypted, lifecycle expired.
+
+    ```hcl
+    module "logs" {
+      source  = "acme/log-bucket/aws"
+      version = "3.1.0"
+
+      bucket_name    = "acme-alb-logs"
+      retention_days = 90
+    }
+    ```
+
+    | name | type | default |
+    | ---- | ---- | ------- |
+    | bucket_name | string | n/a |
+    | retention_days | number | 30 |
+    | versioning | bool | true |
+  versions.tf: |
+    terraform {
+      required_version = ">= 1.5"
+
+      required_providers {
+        aws = {
+          source  = "hashicorp/aws"
+          version = ">= 5.0"
+        }
+      }
+    }
+  variables.tf: |
+    variable "bucket_name" {
+      description = "Name of the bucket to create"
+      type        = string
+    }
+
+    variable "retention_days" {
+      description = "Days before an object is expired"
+      type        = number
+      default     = 30
+    }
+
+    variable "versioning" {
+      description = "Whether object versioning is enabled"
+      type        = bool
+      default     = true
+    }
+
+    variable "tags" {
+      type    = map(string)
+      default = {}
+    }
+  main.tf: |
+    resource "aws_s3_bucket" "this" {
+      bucket = var.bucket_name
+      tags   = var.tags
+    }
+
+    resource "aws_s3_bucket_versioning" "this" {
+      bucket = aws_s3_bucket.this.id
+
+      versioning_configuration {
+        status = var.versioning ? "Enabled" : "Suspended"
+      }
+    }
+
+    resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
+      bucket = aws_s3_bucket.this.id
+
+      rule {
+        apply_server_side_encryption_by_default {
+          sse_algorithm = "AES256"
+        }
+      }
+    }
+
+    resource "aws_s3_bucket_lifecycle_configuration" "this" {
+      bucket = aws_s3_bucket.this.id
+
+      rule {
+        id     = "expire"
+        status = "Enabled"
+
+        expiration {
+          days = var.retention_days
+        }
+      }
+    }
+  outputs.tf: |
+    output "bucket_id" {
+      description = "Name of the created bucket"
+      value       = aws_s3_bucket.this.id
+    }
+
+    output "bucket_arn" {
+      value = aws_s3_bucket.this.arn
+    }
+  examples/basic/main.tf: |
+    module "logs" {
+      source = "../../"
+
+      bucket_name    = "example-log-bucket"
+      retention_days = 14
+    }
+  .github/workflows/validate.yml: |
+    name: validate
+    on: [push, pull_request]
+    jobs:
+      checks:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - uses: hashicorp/setup-terraform@v3
+          - run: terraform fmt -check -recursive
+          - run: terraform init -backend=false && terraform validate
+          - run: cd examples/basic && terraform init -backend=false && terraform validate

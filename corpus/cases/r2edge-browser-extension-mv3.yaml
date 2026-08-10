@@ -1,0 +1,57 @@
+id: r2edge-browser-extension-mv3
+origin: "A Manifest V3 Chrome extension that strips tracking parameters out of links as you browse. It is TypeScript with a bundler and a service worker, it ships as a zip to the Chrome Web Store, and it talks to nothing. The language is plain, the deployable is a store upload, and no infrastructure exists behind it."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  manifest.json: |
+    {
+      "manifest_version": 3,
+      "name": "Cleanlink",
+      "version": "1.3.2",
+      "permissions": ["storage"],
+      "host_permissions": ["<all_urls>"],
+      "background": { "service_worker": "dist/background.js" },
+      "content_scripts": [
+        { "matches": ["<all_urls>"], "js": ["dist/content.js"], "run_at": "document_idle" }
+      ]
+    }
+  package.json: |
+    {
+      "name": "cleanlink",
+      "private": true,
+      "scripts": {
+        "build": "esbuild src/*.ts --bundle --outdir=dist --format=esm",
+        "zip": "npm run build && zip -r cleanlink.zip manifest.json dist icons"
+      },
+      "devDependencies": {
+        "@types/chrome": "^0.0.263",
+        "esbuild": "^0.20.2",
+        "typescript": "^5.4.3"
+      }
+    }
+  src/content.ts: |
+    const junk = /^(utm_|fbclid|gclid|mc_eid)/;
+
+    for (const node of document.querySelectorAll("a[href]")) {
+      const anchor = node as HTMLAnchorElement;
+      const url = new URL(anchor.href, location.href);
+      for (const key of [...url.searchParams.keys()]) {
+        if (junk.test(key)) url.searchParams.delete(key);
+      }
+      anchor.href = url.toString();
+    }
+  src/background.ts: |
+    chrome.runtime.onInstalled.addListener(async () => {
+      const { enabled } = await chrome.storage.sync.get("enabled");
+      if (enabled === undefined) {
+        await chrome.storage.sync.set({ enabled: true });
+      }
+    });
+  README.md: |
+    # Cleanlink
+
+    Removes tracking parameters from links before you click them. Nothing
+    leaves your browser: no server, no analytics, no account, no telemetry.
+
+    `npm run zip` produces the file you upload to the Chrome Web Store.

@@ -1,0 +1,40 @@
+id: r2edge-code-only-in-github-action
+origin: "A git scraping repository. An hourly workflow fetches a public feed, writes the JSON back into the repository and commits the diff, so the history is the product. There is no program anywhere in the tree except the run block itself: a few lines of shell that finish in seconds and leave nothing running."
+expect:
+  stage: script-on-free-functions
+  flags: []
+files:
+  .github/workflows/scrape.yml: |
+    name: scrape
+    on:
+      schedule:
+        - cron: "17 * * * *"
+      workflow_dispatch:
+    jobs:
+      fetch:
+        runs-on: ubuntu-latest
+        permissions:
+          contents: write
+        steps:
+          - uses: actions/checkout@v4
+          - name: Fetch and commit
+            run: |
+              curl -sS "https://api.example.gov/bikepoints" \
+                | jq -S '[.[] | {id, name, lat, lon, bikes}]' > data/docks.json
+              git config user.name "scraper"
+              git config user.email "scraper@users.noreply.github.com"
+              git add data/docks.json
+              git diff --staged --quiet || git commit -m "docks: $(date -u +%FT%TZ)"
+              git push
+  data/docks.json: |
+    [
+      { "id": "dock-1", "name": "River Street", "lat": 51.529, "lon": -0.109, "bikes": 4 },
+      { "id": "dock-2", "name": "Phillimore Gardens", "lat": 51.499, "lon": -0.197, "bikes": 11 }
+    ]
+  README.md: |
+    # docks
+
+    Every hour a workflow rewrites `data/docks.json` and commits it, so
+    `git log` is a record of how many bikes were where. There is no
+    application here: the scraper is the four lines in the workflow, and it
+    is finished before the runner has finished starting.

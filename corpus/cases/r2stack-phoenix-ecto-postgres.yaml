@@ -1,0 +1,106 @@
+id: r2stack-phoenix-ecto-postgres
+origin: >-
+  A Phoenix 1.7 JSON API for a hospital shift rota, no LiveView and no Oban.
+  Ecto and Postgrex hold a connection pool open to a managed Postgres that
+  stores every shift; the BEAM node runs as a release and stays up. All the
+  work happens inside requests, so there is no queue, but there is a database
+  and a process that must be running to serve it.
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  mix.exs: |
+    defmodule Rota.MixProject do
+      use Mix.Project
+
+      def project do
+        [app: :rota, version: "0.3.0", elixir: "~> 1.16", deps: deps()]
+      end
+
+      def application do
+        [mod: {Rota.Application, []}, extra_applications: [:logger]]
+      end
+
+      defp deps do
+        [
+          {:phoenix, "~> 1.7.14"},
+          {:phoenix_ecto, "~> 4.6"},
+          {:ecto_sql, "~> 3.11"},
+          {:postgrex, ">= 0.0.0"},
+          {:jason, "~> 1.4"},
+          {:bandit, "~> 1.5"}
+        ]
+      end
+    end
+  config/runtime.exs: |
+    import Config
+
+    if config_env() == :prod do
+      config :rota, Rota.Repo,
+        url: System.fetch_env!("DATABASE_URL"),
+        pool_size: String.to_integer(System.get_env("POOL_SIZE") || "10")
+
+      config :rota, RotaWeb.Endpoint,
+        server: true,
+        http: [port: String.to_integer(System.get_env("PORT") || "4000")],
+        secret_key_base: System.fetch_env!("SECRET_KEY_BASE")
+    end
+  lib/rota/repo.ex: |
+    defmodule Rota.Repo do
+      use Ecto.Repo, otp_app: :rota, adapter: Ecto.Adapters.Postgres
+    end
+  lib/rota_web/router.ex: |
+    defmodule RotaWeb.Router do
+      use RotaWeb, :router
+
+      pipeline :api do
+        plug :accepts, ["json"]
+      end
+
+      scope "/api", RotaWeb do
+        pipe_through :api
+
+        get "/shifts", ShiftController, :index
+        post "/shifts", ShiftController, :create
+        post "/shifts/:id/swap", ShiftController, :swap
+      end
+    end
+  lib/rota_web/controllers/shift_controller.ex: |
+    defmodule RotaWeb.ShiftController do
+      use RotaWeb, :controller
+
+      alias Rota.Rostering
+
+      def index(conn, params) do
+        json(conn, Rostering.shifts_for_week(params["week"]))
+      end
+
+      def create(conn, %{"shift" => attrs}) do
+        case Rostering.create_shift(attrs) do
+          {:ok, shift} -> conn |> put_status(:created) |> json(shift)
+          {:error, changeset} -> conn |> put_status(422) |> json(errors(changeset))
+        end
+      end
+    end
+  priv/repo/migrations/20240418091200_create_shifts.exs: |
+    defmodule Rota.Repo.Migrations.CreateShifts do
+      use Ecto.Migration
+
+      def change do
+        create table(:shifts) do
+          add :ward, :string, null: false
+          add :starts_at, :utc_datetime, null: false
+          add :ends_at, :utc_datetime, null: false
+          add :nurse_id, references(:nurses)
+          timestamps()
+        end
+
+        create index(:shifts, [:ward, :starts_at])
+      end
+    end
+  README.md: |
+    # rota
+
+    Shift rota API. `mix ecto.migrate` then run the release. `DATABASE_URL`
+    points at the managed Postgres; `POOL_SIZE` should be under the connection
+    limit of the plan.

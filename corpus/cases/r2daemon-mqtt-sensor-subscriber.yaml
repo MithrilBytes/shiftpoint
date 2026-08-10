@@ -1,0 +1,62 @@
+id: r2daemon-mqtt-sensor-subscriber
+origin: "A resident subscriber for a building's sensor network. The broker belongs to the building and the sensors publish to it; this repository is one client that stays subscribed to the temperature and door topics, holds a rolling window in memory to spot a stuck sensor, and posts alerts to a webhook. No broker, no queue and no database of its own."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    paho-mqtt==2.1.0
+    requests==2.32.3
+  subscriber.py: |
+    import json
+    import os
+    import paho.mqtt.client as mqtt
+    from window import RollingWindow
+    from alerts import notify
+
+    windows = {}
+
+    def on_connect(client, userdata, flags, reason_code, properties=None):
+        client.subscribe([("site/+/temperature", 1), ("site/+/door", 1)])
+
+    def on_message(client, userdata, message):
+        room = message.topic.split("/")[1]
+        reading = json.loads(message.payload)
+        window = windows.setdefault(room, RollingWindow(size=60))
+        window.push(reading["value"])
+        if window.is_flat():
+            notify(f"{room} sensor has not moved in an hour")
+
+    client = mqtt.Client(mqtt.CallbackAPIVersion.VERSION2, client_id="site-watch")
+    client.on_connect = on_connect
+    client.on_message = on_message
+    client.connect(os.environ["MQTT_HOST"], int(os.environ.get("MQTT_PORT", 1883)))
+    client.loop_forever()
+  window.py: |
+    from collections import deque
+
+    class RollingWindow:
+        def __init__(self, size):
+            self.values = deque(maxlen=size)
+
+        def push(self, value):
+            self.values.append(value)
+
+        def is_flat(self):
+            return len(self.values) == self.values.maxlen and len(set(self.values)) == 1
+  alerts.py: |
+    import os
+    import requests
+
+    def notify(text):
+        requests.post(os.environ["ALERT_WEBHOOK"], json={"text": text}, timeout=5)
+  .env.example: |
+    MQTT_HOST=broker.site.internal
+    MQTT_PORT=1883
+    ALERT_WEBHOOK=
+  README.md: |
+    # site-watch
+
+    `python subscriber.py` and leave it. The rolling window only means
+    anything if the process has been connected for the last hour, so this
+    cannot be woken up per message.

@@ -1,0 +1,88 @@
+id: r2daemon-kafka-order-consumer
+origin: "The fulfilment side of an order pipeline. It runs as a Kafka consumer group over the orders topic, does the work for each message, and produces failures onto its own retry and dead letter topics that it also consumes. The queue topology belongs to this repository; the workers are just the things that drain it."
+expect:
+  stage: app-with-background-work
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "fulfilment-worker",
+      "private": true,
+      "scripts": { "start": "node src/worker.js" },
+      "dependencies": {
+        "kafkajs": "^2.2.4"
+      }
+    }
+  src/worker.js: |
+    const { Kafka } = require("kafkajs");
+    const { fulfil } = require("./fulfil");
+
+    const kafka = new Kafka({
+      clientId: "fulfilment",
+      brokers: process.env.KAFKA_BROKERS.split(","),
+    });
+
+    const consumer = kafka.consumer({ groupId: "fulfilment-v1" });
+    const producer = kafka.producer();
+
+    async function main() {
+      await producer.connect();
+      await consumer.connect();
+      await consumer.subscribe({ topics: ["orders", "orders.retry"] });
+
+      await consumer.run({
+        eachMessage: async ({ topic, message }) => {
+          const order = JSON.parse(message.value);
+          const attempt = Number(message.headers?.attempt ?? 0);
+          try {
+            await fulfil(order);
+          } catch (error) {
+            const next = attempt >= 4 ? "orders.dlq" : "orders.retry";
+            await producer.send({
+              topic: next,
+              messages: [{ value: message.value, headers: { attempt: String(attempt + 1) } }],
+            });
+          }
+        },
+      });
+    }
+
+    main();
+  src/fulfil.js: |
+    const { reserveStock, bookCourier } = require("./downstream");
+
+    exports.fulfil = async (order) => {
+      const reservation = await reserveStock(order.lines);
+      await bookCourier(order.address, reservation.id);
+    };
+  src/downstream.js: |
+    const call = async (path, body) => {
+      const response = await fetch(`${process.env.WAREHOUSE_URL}${path}`, {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      if (!response.ok) throw new Error(`${path} ${response.status}`);
+      return response.json();
+    };
+
+    exports.reserveStock = (lines) => call("/reservations", { lines });
+    exports.bookCourier = (address, reservationId) => call("/courier", { address, reservationId });
+  topics.md: |
+    # Topics this service owns
+
+    - `orders` consumed, produced by checkout
+    - `orders.retry` produced and consumed here, five attempts
+    - `orders.dlq` produced here, drained by hand
+  Dockerfile: |
+    FROM node:20-alpine
+    WORKDIR /app
+    COPY package*.json ./
+    RUN npm ci --omit=dev
+    COPY src ./src
+    CMD ["node", "src/worker.js"]
+  README.md: |
+    # fulfilment-worker
+
+    No HTTP surface. Scale it by adding processes to the consumer group;
+    the partitions rebalance across whatever is running.

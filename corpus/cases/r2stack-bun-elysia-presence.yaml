@@ -1,0 +1,80 @@
+id: r2stack-bun-elysia-presence
+origin: >-
+  A Bun and Elysia presence relay for a collaborative drawing tool. Clients
+  hold a WebSocket open on a room and their strokes are fanned out to whoever
+  else is in it. The rooms are a Map in the process: nothing is written down,
+  nothing is queued, and a second instance would silently split a room in two,
+  so this is one process that has to stay up.
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "canvas-presence",
+      "private": true,
+      "type": "module",
+      "module": "src/index.ts",
+      "scripts": { "start": "bun run src/index.ts" },
+      "dependencies": { "elysia": "^1.1.0" }
+    }
+  src/index.ts: |
+    import { Elysia } from "elysia";
+    import { rooms } from "./rooms";
+
+    new Elysia()
+      .ws("/room/:id", {
+        open(ws) {
+          const id = ws.data.params.id;
+          rooms.join(id, ws.id);
+          ws.subscribe(id);
+          ws.publish(id, { joined: ws.id, present: rooms.size(id) });
+        },
+        message(ws, stroke) {
+          ws.publish(ws.data.params.id, stroke);
+        },
+        close(ws) {
+          const id = ws.data.params.id;
+          rooms.leave(id, ws.id);
+          ws.publish(id, { left: ws.id, present: rooms.size(id) });
+        },
+      })
+      .get("/rooms", () => rooms.counts())
+      .listen(3000);
+  src/rooms.ts: |
+    const members = new Map<string, Set<string>>();
+
+    export const rooms = {
+      join(id: string, member: string) {
+        if (!members.has(id)) members.set(id, new Set());
+        members.get(id)!.add(member);
+      },
+      leave(id: string, member: string) {
+        const set = members.get(id);
+        if (!set) return;
+        set.delete(member);
+        if (set.size === 0) members.delete(id);
+      },
+      size(id: string) {
+        return members.get(id)?.size ?? 0;
+      },
+      counts() {
+        return Object.fromEntries([...members].map(([id, set]) => [id, set.size]));
+      },
+    };
+  Dockerfile: |
+    FROM oven/bun:1.1-alpine
+    WORKDIR /app
+    COPY package.json bun.lockb ./
+    RUN bun install --frozen-lockfile
+    COPY src ./src
+    EXPOSE 3000
+    CMD ["bun", "run", "src/index.ts"]
+  README.md: |
+    # canvas-presence
+
+    Fans strokes out to everyone in a room.
+
+    Rooms are held in memory, so run exactly one of these and put it behind a
+    proxy that does not buffer or time out idle sockets. Restarting drops every
+    connected client, which is why deploys happen at night.

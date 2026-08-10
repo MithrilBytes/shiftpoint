@@ -1,0 +1,124 @@
+id: r2daemon-libp2p-gossip-node
+origin: "A node for a small peer to peer network that gossips signed sensor attestations. It listens on a fixed port, joins the DHT, keeps a handful of peer connections open and republishes what it hears. Being reachable and staying joined is the entire job: a node that comes and goes is a node the mesh routes around."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/attest/meshnode
+
+    go 1.22
+
+    require (
+        github.com/libp2p/go-libp2p v0.35.1
+        github.com/libp2p/go-libp2p-pubsub v0.11.0
+        github.com/libp2p/go-libp2p-kad-dht v0.25.2
+    )
+  main.go: |
+    package main
+
+    import (
+        "context"
+        "log"
+        "os"
+        "os/signal"
+
+        "github.com/libp2p/go-libp2p"
+        dht "github.com/libp2p/go-libp2p-kad-dht"
+        pubsub "github.com/libp2p/go-libp2p-pubsub"
+    )
+
+    func main() {
+        ctx := context.Background()
+
+        host, err := libp2p.New(libp2p.ListenAddrStrings("/ip4/0.0.0.0/tcp/4001"))
+        if err != nil {
+            log.Fatal(err)
+        }
+        log.Printf("peer id %s", host.ID())
+
+        table, err := dht.New(ctx, host)
+        if err != nil {
+            log.Fatal(err)
+        }
+        if err := table.Bootstrap(ctx); err != nil {
+            log.Fatal(err)
+        }
+        dialBootstrapPeers(ctx, host)
+
+        ps, err := pubsub.NewGossipSub(ctx, host)
+        if err != nil {
+            log.Fatal(err)
+        }
+        go Follow(ctx, ps, "attestations/v1")
+
+        stop := make(chan os.Signal, 1)
+        signal.Notify(stop, os.Interrupt)
+        <-stop
+    }
+  gossip.go: |
+    package main
+
+    import (
+        "context"
+        "log"
+
+        pubsub "github.com/libp2p/go-libp2p-pubsub"
+    )
+
+    func Follow(ctx context.Context, ps *pubsub.PubSub, name string) {
+        topic, err := ps.Join(name)
+        if err != nil {
+            log.Fatal(err)
+        }
+        sub, err := topic.Subscribe()
+        if err != nil {
+            log.Fatal(err)
+        }
+        seen := map[string]bool{}
+
+        for {
+            msg, err := sub.Next(ctx)
+            if err != nil {
+                return
+            }
+            key := string(msg.Data[:32])
+            if seen[key] || !VerifySignature(msg.Data) {
+                continue
+            }
+            seen[key] = true
+            log.Printf("relayed attestation from %s", msg.GetFrom())
+        }
+    }
+  bootstrap.go: |
+    package main
+
+    import (
+        "context"
+        "strings"
+        "os"
+
+        "github.com/libp2p/go-libp2p/core/host"
+        "github.com/libp2p/go-libp2p/core/peer"
+        "github.com/multiformats/go-multiaddr"
+    )
+
+    func dialBootstrapPeers(ctx context.Context, h host.Host) {
+        for _, raw := range strings.Split(os.Getenv("BOOTSTRAP_PEERS"), ",") {
+            addr, err := multiaddr.NewMultiaddr(raw)
+            if err != nil {
+                continue
+            }
+            info, err := peer.AddrInfoFromP2pAddr(addr)
+            if err != nil {
+                continue
+            }
+            h.Connect(ctx, *info)
+        }
+    }
+  README.md: |
+    # meshnode
+
+    Wants tcp/4001 open inbound and a stable address. Peer state and the
+    seen set are in memory by design; a restart just means redialling the
+    bootstrap list and catching up.

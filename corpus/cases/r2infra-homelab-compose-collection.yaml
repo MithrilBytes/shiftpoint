@@ -1,0 +1,70 @@
+id: r2infra-homelab-compose-collection
+origin: "One person's home server, kept in git so a rebuild is repeatable. A directory per service, each a compose file pulling somebody else's image, bound to that machine's hardware: the iGPU for transcoding, port 53 on the house LAN, a Zigbee stick on /dev/ttyUSB0, twenty terabytes of media on /mnt/tank. No source, no build, no artefact. It is not an application and it cannot run anywhere but that box."
+expect:
+  stage: unknown
+  flags: []
+files:
+  README.md: |
+    # homelab
+
+    Runs on `nuc01` in the cupboard under the stairs. Rebuild with:
+
+        ./up.sh
+
+    Backups of the bind mounts go to the NAS nightly via restic, which is a
+    systemd timer on the host and not in here.
+  jellyfin/docker-compose.yml: |
+    services:
+      jellyfin:
+        image: jellyfin/jellyfin:latest
+        restart: unless-stopped
+        network_mode: host
+        devices:
+          - /dev/dri:/dev/dri
+        volumes:
+          - ./config:/config
+          - ./cache:/cache
+          - /mnt/tank/media:/media:ro
+  pihole/docker-compose.yml: |
+    services:
+      pihole:
+        image: pihole/pihole:latest
+        restart: unless-stopped
+        ports:
+          - "53:53/tcp"
+          - "53:53/udp"
+          - "8080:80/tcp"
+        environment:
+          TZ: Europe/London
+          FTLCONF_LOCAL_IPV4: 192.168.1.4
+        volumes:
+          - ./etc-pihole:/etc/pihole
+          - ./etc-dnsmasq.d:/etc/dnsmasq.d
+        cap_add:
+          - NET_ADMIN
+  homeassistant/docker-compose.yml: |
+    services:
+      homeassistant:
+        image: ghcr.io/home-assistant/home-assistant:stable
+        restart: unless-stopped
+        privileged: true
+        network_mode: host
+        devices:
+          - /dev/ttyUSB0:/dev/ttyUSB0
+        volumes:
+          - ./config:/config
+          - /run/dbus:/run/dbus:ro
+  up.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    for stack in jellyfin pihole homeassistant; do
+      docker compose -f "$stack/docker-compose.yml" pull
+      docker compose -f "$stack/docker-compose.yml" up -d
+    done
+  .env.example: |
+    TZ=Europe/London
+    PUID=1000
+    PGID=1000
+    LAN_IP=192.168.1.4
+    MEDIA_ROOT=/mnt/tank/media

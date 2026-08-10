@@ -1,0 +1,54 @@
+id: r2daemon-apscheduler-price-watcher
+origin: "A one file price watcher for a handful of product pages. It carries its own BlockingScheduler instead of leaning on cron, so the timing only happens while the process is alive: start it and walk away. It appends to a CSV and posts to a webhook when a price moves."
+expect:
+  stage: script-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    APScheduler==3.10.4
+    requests==2.32.3
+    beautifulsoup4==4.12.3
+  watch.py: |
+    import csv
+    import os
+    from datetime import datetime
+
+    import requests
+    from apscheduler.schedulers.blocking import BlockingScheduler
+    from bs4 import BeautifulSoup
+
+    WATCHLIST = [
+        ("kettle", "https://example-shop.test/p/kettle"),
+        ("grinder", "https://example-shop.test/p/grinder"),
+    ]
+
+    last_seen = {}
+
+    def price_of(url):
+        soup = BeautifulSoup(requests.get(url, timeout=10).text, "html.parser")
+        return float(soup.select_one(".price").text.strip().lstrip("$"))
+
+    def check():
+        for name, url in WATCHLIST:
+            price = price_of(url)
+            with open("history.csv", "a", newline="") as handle:
+                csv.writer(handle).writerow([datetime.utcnow().isoformat(), name, price])
+            if last_seen.get(name) and price < last_seen[name]:
+                requests.post(
+                    os.environ["WEBHOOK_URL"],
+                    json={"text": f"{name} dropped to {price}"},
+                    timeout=5,
+                )
+            last_seen[name] = price
+
+    scheduler = BlockingScheduler()
+    scheduler.add_job(check, "interval", minutes=20, next_run_time=datetime.now())
+    scheduler.start()
+  .env.example: |
+    WEBHOOK_URL=
+  README.md: |
+    # price-watcher
+
+    `python watch.py`. The schedule lives inside the process, so it has to
+    keep running; there is no cron entry and nothing external triggers it.
+    Twenty minutes is polite for this shop, do not lower it.

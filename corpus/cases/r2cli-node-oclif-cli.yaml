@@ -1,0 +1,76 @@
+id: r2cli-node-oclif-cli
+origin: "An oclif command line client for a hosted incident service, the shape the Heroku and Salesforce CLIs use. It talks to somebody else's API over HTTPS from the operator's laptop. The API is not in this repository and nothing here is deployed."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "@packetship/cli",
+      "version": "1.6.3",
+      "description": "Manage packetship incidents from your terminal",
+      "bin": { "packetship": "./bin/run.js" },
+      "type": "module",
+      "dependencies": {
+        "@oclif/core": "^3.19.0",
+        "@oclif/plugin-help": "^6.0.0"
+      },
+      "oclif": {
+        "bin": "packetship",
+        "commands": "./dist/commands",
+        "plugins": ["@oclif/plugin-help"],
+        "topicSeparator": " "
+      },
+      "files": ["bin", "dist", "oclif.manifest.json"]
+    }
+  bin/run.js: |
+    #!/usr/bin/env node
+    import { execute } from "@oclif/core";
+
+    await execute({ dir: import.meta.url });
+  src/commands/incidents/list.ts: |
+    import { Args, Command, Flags } from "@oclif/core";
+
+    export default class IncidentsList extends Command {
+      static description = "List open incidents for a service";
+      static args = { service: Args.string({ required: true }) };
+      static flags = { limit: Flags.integer({ default: 20 }) };
+
+      async run(): Promise<void> {
+        const { args, flags } = await this.parse(IncidentsList);
+        const token = process.env.PACKETSHIP_TOKEN;
+        const res = await fetch(
+          `https://api.packetship.io/v1/services/${args.service}/incidents?limit=${flags.limit}`,
+          { headers: { authorization: `Bearer ${token}` } },
+        );
+        for (const i of await res.json()) {
+          this.log(`${i.id}  ${i.severity}  ${i.title}`);
+        }
+      }
+    }
+  src/commands/incidents/ack.ts: |
+    import { Args, Command } from "@oclif/core";
+
+    export default class IncidentsAck extends Command {
+      static description = "Acknowledge an incident";
+      static args = { id: Args.string({ required: true }) };
+
+      async run(): Promise<void> {
+        const { args } = await this.parse(IncidentsAck);
+        await fetch(`https://api.packetship.io/v1/incidents/${args.id}/ack`, {
+          method: "POST",
+          headers: { authorization: `Bearer ${process.env.PACKETSHIP_TOKEN}` },
+        });
+        this.log(`acknowledged ${args.id}`);
+      }
+    }
+  README.md: |
+    # packetship CLI
+
+    ```
+    npm install -g @packetship/cli
+    export PACKETSHIP_TOKEN=...
+    packetship incidents list checkout-api
+    ```
+
+    A client for the hosted packetship API. Nothing here runs as a service.

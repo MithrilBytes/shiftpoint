@@ -1,0 +1,69 @@
+id: r2mixed-mostly-fixtures
+origin: >-
+  The conformance vector repository for a small interchange format. It is
+  nothing but data: a few hundred numbered JSON vectors split into passing and
+  failing directories, a manifest that indexes them, a spec note and a licence.
+  Implementations in half a dozen languages pull it in as a git submodule and
+  run it from their own test suites. There is no code here in any language and
+  nothing to run.
+expect:
+  stage: unknown
+  flags: []
+files:
+  README.md: |
+    # cbf-vectors
+
+    Conformance vectors for the Compact Binary Form spec, revision 4.
+
+    Add this repository as a submodule under your own `testdata/` and drive it
+    from your test runner. `manifest.json` lists every vector with its
+    expected outcome. Nothing here is executable and there is no build step:
+    the vectors are the deliverable.
+
+    Vectors are numbered and never renumbered. A vector is only ever added or
+    marked deprecated in the manifest, so a pinned submodule keeps meaning what
+    it meant.
+  manifest.json: |
+    {
+      "revision": 4,
+      "count": 412,
+      "groups": [
+        { "dir": "vectors/valid", "expect": "accept", "count": 288 },
+        { "dir": "vectors/invalid", "expect": "reject", "count": 124 }
+      ]
+    }
+  vectors/valid/001-empty-map.json: |
+    {
+      "id": "001-empty-map",
+      "hex": "a0",
+      "value": {},
+      "note": "Zero length map, canonical encoding."
+    }
+  vectors/valid/047-nested-array.json: |
+    {
+      "id": "047-nested-array",
+      "hex": "8201820203",
+      "value": [1, [2, 3]],
+      "note": "Arrays nest to any depth; decoders must not flatten."
+    }
+  vectors/invalid/113-truncated-string.json: |
+    {
+      "id": "113-truncated-string",
+      "hex": "6568656c6c",
+      "error": "unexpected end of input",
+      "note": "Header declares five bytes, four are present."
+    }
+  vectors/invalid/204-duplicate-key.json: |
+    {
+      "id": "204-duplicate-key",
+      "hex": "a2616101616102",
+      "error": "duplicate map key",
+      "note": "Revision 3 accepted this. Revision 4 rejects it."
+    }
+  SPEC-NOTES.md: |
+    Where the spec text is ambiguous, the vector is authoritative and the
+    ambiguity is filed against the spec. Open issues are listed here with the
+    vector id they came from.
+  LICENSE: |
+    CC0 1.0 Universal. The vectors are placed in the public domain so that
+    implementations under any licence can embed them.

@@ -1,0 +1,82 @@
+id: r2mixed-cms-and-own-plugin
+origin: >-
+  A marketing team's Strapi instance with a plugin they wrote living in the
+  same repository under `src/plugins/audit-log`. The plugin is local and never
+  published to npm. Strapi keeps the content in a SQLite file on a mounted
+  volume, which is the default and which nobody has had a reason to change at
+  this size.
+expect:
+  stage: app-with-file-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "acme-cms",
+      "private": true,
+      "scripts": { "develop": "strapi develop", "start": "strapi start", "build": "strapi build" },
+      "dependencies": {
+        "@strapi/strapi": "4.25.4",
+        "@strapi/plugin-users-permissions": "4.25.4",
+        "better-sqlite3": "11.1.2"
+      }
+    }
+  config/database.js: |
+    module.exports = ({ env }) => ({
+      connection: {
+        client: "sqlite",
+        connection: { filename: env("DATABASE_FILENAME", "data/cms.db") },
+        useNullAsDefault: true,
+      },
+    });
+  config/plugins.js: |
+    module.exports = {
+      "audit-log": {
+        enabled: true,
+        resolve: "./src/plugins/audit-log",
+      },
+    };
+  src/plugins/audit-log/package.json: |
+    {
+      "name": "audit-log",
+      "version": "0.3.0",
+      "private": true,
+      "strapi": {
+        "kind": "plugin",
+        "displayName": "Audit log",
+        "description": "Records who changed which entry"
+      }
+    }
+  src/plugins/audit-log/server/index.js: |
+    module.exports = {
+      register({ strapi }) {
+        strapi.db.lifecycles.subscribe({
+          models: ["api::article.article", "api::page.page"],
+          async afterUpdate(event) {
+            await strapi.db.query("plugin::audit-log.entry").create({
+              data: {
+                model: event.model.uid,
+                entryId: event.result.id,
+                changedAt: new Date(),
+              },
+            });
+          },
+        });
+      },
+    };
+  src/api/article/content-types/article/schema.json: |
+    {
+      "kind": "collectionType",
+      "collectionName": "articles",
+      "info": { "singularName": "article", "pluralName": "articles" },
+      "attributes": {
+        "title": { "type": "string", "required": true },
+        "body": { "type": "richtext" }
+      }
+    }
+  README.md: |
+    # acme-cms
+
+    Runs on one 2 GB droplet. `data/` is a mounted volume and holds `cms.db`,
+    which is the whole content database; the nightly backup is a copy of that
+    file. The audit log plugin is ours and is deliberately local: it is coupled
+    to our content types and has no life outside this instance.

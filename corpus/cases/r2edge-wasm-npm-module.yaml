@@ -1,0 +1,60 @@
+id: r2edge-wasm-npm-module
+origin: "A Rust crate compiled to WebAssembly with wasm-bindgen and published to npm by wasm-pack. Consumers import it inside their own bundle; nobody starts it as a process. The cdylib crate type is the only thing in here that resembles a binary."
+expect:
+  stage: library
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "slugify-wasm"
+    version = "1.4.0"
+    edition = "2021"
+    license = "MIT"
+
+    [lib]
+    crate-type = ["cdylib", "rlib"]
+
+    [dependencies]
+    wasm-bindgen = "0.2"
+    unicode-normalization = "0.1"
+  src/lib.rs: |
+    use wasm_bindgen::prelude::*;
+
+    #[wasm_bindgen]
+    pub fn slugify(input: &str) -> String {
+        let mapped: String = input
+            .chars()
+            .map(|c| if c.is_ascii_alphanumeric() { c.to_ascii_lowercase() } else { '-' })
+            .collect();
+        mapped.trim_matches('-').to_string()
+    }
+  README.md: |
+    # slugify-wasm
+
+    ```
+    npm install @northgate/slugify-wasm
+    ```
+
+    ```js
+    import init, { slugify } from "@northgate/slugify-wasm";
+    await init();
+    slugify("Hello, World!"); // "hello-world"
+    ```
+
+    Build locally with `wasm-pack build --target bundler`. The published
+    package is the contents of `pkg/`.
+  .github/workflows/publish.yml: |
+    name: publish
+    on:
+      push:
+        tags: ["v*"]
+    jobs:
+      npm:
+        runs-on: ubuntu-latest
+        steps:
+          - uses: actions/checkout@v4
+          - run: cargo install wasm-pack
+          - run: wasm-pack build --target bundler
+          - run: npm publish pkg/ --access public
+            env:
+              NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}

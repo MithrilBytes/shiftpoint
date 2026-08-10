@@ -1,0 +1,98 @@
+id: r2cli-go-cobra-cli
+origin: "A Go command line tool built on cobra that reports statistics about a local git repository. Cobra plus goreleaser plus a single main package is how most Go CLIs are shaped. Users get a binary from a release page or go install; there is no server anywhere in it."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/gitstat
+
+    go 1.22
+
+    require (
+        github.com/spf13/cobra v1.8.0
+        github.com/go-git/go-git/v5 v5.11.0
+    )
+  main.go: |
+    package main
+
+    import "github.com/example/gitstat/cmd"
+
+    func main() {
+        cmd.Execute()
+    }
+  cmd/root.go: |
+    package cmd
+
+    import (
+        "fmt"
+        "os"
+
+        "github.com/spf13/cobra"
+    )
+
+    var rootCmd = &cobra.Command{
+        Use:   "gitstat",
+        Short: "Report commit statistics for a local repository",
+    }
+
+    func Execute() {
+        if err := rootCmd.Execute(); err != nil {
+            fmt.Fprintln(os.Stderr, err)
+            os.Exit(1)
+        }
+    }
+  cmd/authors.go: |
+    package cmd
+
+    import (
+        "fmt"
+
+        "github.com/spf13/cobra"
+    )
+
+    var since string
+
+    var authorsCmd = &cobra.Command{
+        Use:   "authors [path]",
+        Short: "Count commits per author",
+        Args:  cobra.MaximumNArgs(1),
+        RunE: func(c *cobra.Command, args []string) error {
+            path := "."
+            if len(args) == 1 {
+                path = args[0]
+            }
+            counts, err := countAuthors(path, since)
+            if err != nil {
+                return err
+            }
+            for name, n := range counts {
+                fmt.Printf("%4d  %s\n", n, name)
+            }
+            return nil
+        },
+    }
+
+    func init() {
+        authorsCmd.Flags().StringVar(&since, "since", "", "only count commits after this date")
+        rootCmd.AddCommand(authorsCmd)
+    }
+  .goreleaser.yaml: |
+    builds:
+      - main: .
+        binary: gitstat
+        goos: [linux, darwin, windows]
+        goarch: [amd64, arm64]
+    archives:
+      - format: tar.gz
+    checksum:
+      name_template: "checksums.txt"
+  README.md: |
+    # gitstat
+
+    ```
+    go install github.com/example/gitstat@latest
+    gitstat authors --since 2025-01-01
+    ```
+
+    Runs against a checkout on your own disk. Prints a table and exits.

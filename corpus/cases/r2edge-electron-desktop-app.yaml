@@ -1,0 +1,67 @@
+id: r2edge-electron-desktop-app
+origin: "An Electron desktop app for annotating PDFs, distributed as signed installers from GitHub Releases. It contains an index.html that is not a site and a main process that is not a server. The language is obvious, and nobody hosts any part of it."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "marginalia",
+      "version": "2.0.1",
+      "main": "src/main.js",
+      "scripts": {
+        "start": "electron .",
+        "dist": "electron-builder --mac --win --linux"
+      },
+      "dependencies": {
+        "electron-store": "^8.2.0",
+        "pdf-lib": "^1.17.1"
+      },
+      "devDependencies": {
+        "electron": "^29.1.5",
+        "electron-builder": "^24.13.3"
+      }
+    }
+  src/main.js: |
+    const { app, BrowserWindow } = require("electron");
+    const path = require("node:path");
+
+    function createWindow() {
+      const win = new BrowserWindow({
+        width: 1100,
+        height: 800,
+        webPreferences: { preload: path.join(__dirname, "preload.js") },
+      });
+      win.loadFile(path.join(__dirname, "renderer/index.html"));
+    }
+
+    app.whenReady().then(createWindow);
+    app.on("window-all-closed", () => app.quit());
+  src/preload.js: |
+    const { contextBridge, ipcRenderer } = require("electron");
+
+    contextBridge.exposeInMainWorld("files", {
+      open: () => ipcRenderer.invoke("dialog:openPdf"),
+      save: (bytes) => ipcRenderer.invoke("dialog:savePdf", bytes),
+    });
+  src/renderer/index.html: |
+    <!doctype html>
+    <meta charset="utf-8">
+    <title>Marginalia</title>
+    <div id="viewer"></div>
+    <script type="module" src="./renderer.js"></script>
+  electron-builder.yml: |
+    appId: org.example.marginalia
+    productName: Marginalia
+    mac:
+      target: dmg
+      category: public.app-category.productivity
+    win:
+      target: nsis
+    linux:
+      target: AppImage
+  README.md: |
+    # Marginalia
+
+    Annotate PDFs offline. Documents never leave your machine and there is no
+    account. Download the installer for your platform from Releases.

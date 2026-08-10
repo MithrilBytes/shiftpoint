@@ -1,0 +1,48 @@
+id: r2edge-types-package-devdeps-only
+origin: "Hand written TypeScript declarations for an old JavaScript library that ships none of its own. There is no runtime code and no runtime dependency, so every entry in the manifest is a devDependency and the published tarball is a single .d.ts file. It is still a package other people install."
+expect:
+  stage: library
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "@northgate/types-legacy-cart",
+      "version": "3.2.0",
+      "description": "TypeScript declarations for legacy-cart 3.x",
+      "types": "index.d.ts",
+      "files": ["index.d.ts"],
+      "scripts": { "test": "tsd && tsc --noEmit index.d.ts" },
+      "devDependencies": {
+        "tsd": "^0.31.0",
+        "typescript": "^5.4.3"
+      },
+      "license": "MIT"
+    }
+  index.d.ts: |
+    declare module "legacy-cart" {
+      export interface CartItem {
+        sku: string;
+        quantity: number;
+        unitPriceMinor: number;
+      }
+
+      export function addItem(item: CartItem): void;
+      export function totalMinor(): number;
+      export function clear(): void;
+    }
+  test-d/index.test-d.ts: |
+    import { expectType } from "tsd";
+    import { addItem, totalMinor } from "legacy-cart";
+
+    addItem({ sku: "AB-1", quantity: 2, unitPriceMinor: 499 });
+    expectType<number>(totalMinor());
+  README.md: |
+    # @northgate/types-legacy-cart
+
+    ```
+    npm install --save-dev @northgate/types-legacy-cart
+    ```
+
+    Declarations only. Nothing in here executes: `legacy-cart` itself is
+    unchanged and still ships as plain JavaScript. Versions track the major
+    of the library, not of these types.

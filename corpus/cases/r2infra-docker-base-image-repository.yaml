@@ -1,0 +1,94 @@
+id: r2infra-docker-base-image-repository
+origin: "The repository that builds the organisation's Python base image. Other teams write `FROM ghcr.io/acme/python-base:3.12` at the top of their own Dockerfiles. It builds two architectures on a tag and pushes to the registry. There is no service in it and nothing to run: the image is the artefact."
+expect:
+  stage: library
+  flags: []
+files:
+  README.md: |
+    # python-base
+
+    The hardened Python base every acme service builds from.
+
+        FROM ghcr.io/acme/python-base:3.12
+
+    Tags follow the Python minor version. `3.12` moves on every rebuild;
+    `3.12-2026-07-14` is immutable. Runs as uid 10001, no shell history, no
+    package manager caches, no root.
+  Dockerfile: |
+    FROM python:3.12-slim-bookworm
+
+    LABEL org.opencontainers.image.source=https://github.com/acme/python-base
+    LABEL org.opencontainers.image.description="Hardened Python base image"
+
+    RUN apt-get update \
+     && apt-get install -y --no-install-recommends \
+          ca-certificates curl libpq5 tini \
+     && rm -rf /var/lib/apt/lists/*
+
+    COPY scripts/harden.sh /tmp/harden.sh
+    RUN /tmp/harden.sh && rm /tmp/harden.sh
+
+    RUN useradd --create-home --uid 10001 --shell /usr/sbin/nologin app
+    USER app
+    WORKDIR /srv
+
+    ENTRYPOINT ["/usr/bin/tini", "--"]
+  scripts/harden.sh: |
+    #!/usr/bin/env bash
+    set -euo pipefail
+
+    # Remove setuid bits nothing in our images needs.
+    find / -xdev -perm -4000 -type f -exec chmod u-s {} + 2>/dev/null || true
+
+    # No package manager at runtime.
+    rm -f /usr/bin/apt /usr/bin/apt-get /usr/bin/dpkg
+
+    # Trim pip's cache and the wheel it ships with.
+    python -m pip cache purge || true
+  test/goss.yaml: |
+    user:
+      app:
+        exists: true
+        uid: 10001
+
+    file:
+      /usr/bin/apt:
+        exists: false
+
+    command:
+      python-version:
+        exec: python --version
+        exit-status: 0
+        stdout:
+          - /Python 3\.12/
+  .github/workflows/build.yml: |
+    name: build and push
+    on:
+      push:
+        tags: ["v*"]
+      schedule:
+        - cron: "0 4 * * 1"
+    jobs:
+      image:
+        runs-on: ubuntu-latest
+        permissions:
+          contents: read
+          packages: write
+          id-token: write
+        steps:
+          - uses: actions/checkout@v4
+          - uses: docker/setup-buildx-action@v3
+          - uses: docker/login-action@v3
+            with:
+              registry: ghcr.io
+              username: ${{ github.actor }}
+              password: ${{ secrets.GITHUB_TOKEN }}
+          - uses: docker/build-push-action@v6
+            with:
+              platforms: linux/amd64,linux/arm64
+              push: true
+              tags: |
+                ghcr.io/acme/python-base:3.12
+                ghcr.io/acme/python-base:3.12-${{ github.run_id }}
+          - name: Verify the image
+            run: dgoss run ghcr.io/acme/python-base:3.12 sleep 5

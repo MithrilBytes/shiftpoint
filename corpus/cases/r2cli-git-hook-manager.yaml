@@ -1,0 +1,109 @@
+id: r2cli-git-hook-manager
+origin: "A git hook manager in the shape of lefthook: a single Go binary that reads a yaml file and writes shims into .git/hooks, so a team gets the same pre-commit checks. It runs on developer machines and in CI, once per commit, and there is nothing for it to be deployed onto."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  go.mod: |
+    module github.com/example/hookwright
+
+    go 1.22
+
+    require gopkg.in/yaml.v3 v3.0.1
+  main.go: |
+    package main
+
+    import (
+        "flag"
+        "fmt"
+        "os"
+
+        "github.com/example/hookwright/internal/hooks"
+    )
+
+    func main() {
+        config := flag.String("config", "hookwright.yml", "path to the hook definitions")
+        flag.Parse()
+
+        var err error
+        switch flag.Arg(0) {
+        case "install":
+            err = hooks.Install(*config)
+        case "run":
+            err = hooks.Run(*config, flag.Arg(1))
+        default:
+            fmt.Fprintln(os.Stderr, "usage: hookwright [install|run <hook>]")
+            os.Exit(2)
+        }
+        if err != nil {
+            fmt.Fprintln(os.Stderr, err)
+            os.Exit(1)
+        }
+    }
+  internal/hooks/install.go: |
+    package hooks
+
+    import (
+        "fmt"
+        "os"
+        "path/filepath"
+    )
+
+    const shim = "#!/bin/sh\nexec hookwright run %s\n"
+
+    func Install(config string) error {
+        defs, err := load(config)
+        if err != nil {
+            return err
+        }
+        for name := range defs {
+            path := filepath.Join(".git", "hooks", name)
+            body := fmt.Sprintf(shim, name)
+            if err := os.WriteFile(path, []byte(body), 0o755); err != nil {
+                return err
+            }
+            fmt.Println("installed", path)
+        }
+        return nil
+    }
+  internal/hooks/run.go: |
+    package hooks
+
+    import (
+        "os"
+        "os/exec"
+    )
+
+    func Run(config, hook string) error {
+        defs, err := load(config)
+        if err != nil {
+            return err
+        }
+        for _, step := range defs[hook] {
+            cmd := exec.Command("sh", "-c", step.Run)
+            cmd.Stdout, cmd.Stderr = os.Stdout, os.Stderr
+            if err := cmd.Run(); err != nil {
+                return err
+            }
+        }
+        return nil
+    }
+  hookwright.yml: |
+    pre-commit:
+      - name: format
+        run: gofmt -l -w .
+      - name: vet
+        run: go vet ./...
+    commit-msg:
+      - name: conventional
+        run: hookwright-lint-message "$1"
+  README.md: |
+    # hookwright
+
+    ```
+    go install github.com/example/hookwright@latest
+    hookwright install
+    ```
+
+    The yaml at the root of your repository is the example config. Every
+    invocation is one commit long.

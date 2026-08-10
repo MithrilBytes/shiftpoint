@@ -1,0 +1,26 @@
+id: r2edge-empty-package-json
+origin: "What `npm init -y` leaves behind. Somebody claimed a repository name, ran the initialiser, pushed, and never came back. The manifest names an entry point that was never written. JavaScript is the only true thing you can say about it."
+expect:
+  stage: known-language-only
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "ratchet",
+      "version": "1.0.0",
+      "description": "",
+      "main": "index.js",
+      "scripts": {
+        "test": "echo \"Error: no test specified\" && exit 1"
+      },
+      "keywords": [],
+      "author": "",
+      "license": "ISC"
+    }
+  .gitignore: |
+    node_modules/
+    .DS_Store
+  README.md: |
+    # ratchet
+
+    TODO

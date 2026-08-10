@@ -1,0 +1,120 @@
+id: r2daemon-smtp-inbound-receiver
+origin: "An SMTP server that takes delivery of mail for a support domain. It binds port 25, speaks the protocol to whatever tries to deliver, writes each accepted message into a maildir and posts a parsed summary to the ticketing webhook. It has to be listening when the sending server decides to connect, which is not a moment we control."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/helpdesk/inbound
+
+    go 1.22
+
+    require (
+        github.com/emersion/go-smtp v0.21.2
+        github.com/emersion/go-message v0.18.1
+    )
+  main.go: |
+    package main
+
+    import (
+        "log"
+        "time"
+
+        "github.com/emersion/go-smtp"
+    )
+
+    func main() {
+        server := smtp.NewServer(&Backend{Maildir: "/var/mail/support"})
+        server.Addr = ":25"
+        server.Domain = "support.example.com"
+        server.ReadTimeout = 60 * time.Second
+        server.MaxMessageBytes = 25 << 20
+        server.AllowInsecureAuth = false
+
+        log.Printf("listening for smtp on %s", server.Addr)
+        log.Fatal(server.ListenAndServe())
+    }
+  backend.go: |
+    package main
+
+    import (
+        "io"
+        "strings"
+
+        "github.com/emersion/go-smtp"
+    )
+
+    type Backend struct {
+        Maildir string
+    }
+
+    func (b *Backend) NewSession(_ *smtp.Conn) (smtp.Session, error) {
+        return &Session{backend: b}, nil
+    }
+
+    type Session struct {
+        backend *Backend
+        to      []string
+    }
+
+    func (s *Session) Mail(from string, _ *smtp.MailOptions) error { return nil }
+
+    func (s *Session) Rcpt(to string, _ *smtp.RcptOptions) error {
+        if !strings.HasSuffix(to, "@support.example.com") {
+            return &smtp.SMTPError{Code: 550, Message: "relay denied"}
+        }
+        s.to = append(s.to, to)
+        return nil
+    }
+
+    func (s *Session) Data(r io.Reader) error {
+        path, err := writeMaildir(s.backend.Maildir, r)
+        if err != nil {
+            return err
+        }
+        return raiseTicket(path, s.to)
+    }
+
+    func (s *Session) Reset()        { s.to = nil }
+    func (s *Session) Logout() error { return nil }
+  maildir.go: |
+    package main
+
+    import (
+        "fmt"
+        "io"
+        "os"
+        "time"
+    )
+
+    func writeMaildir(dir string, r io.Reader) (string, error) {
+        name := fmt.Sprintf("%s/new/%d.%d", dir, time.Now().UnixNano(), os.Getpid())
+        file, err := os.Create(name)
+        if err != nil {
+            return "", err
+        }
+        defer file.Close()
+        _, err = io.Copy(file, r)
+        return name, err
+    }
+  ticket.go: |
+    package main
+
+    import (
+        "bytes"
+        "encoding/json"
+        "net/http"
+        "os"
+    )
+
+    func raiseTicket(path string, to []string) error {
+        body, _ := json.Marshal(map[string]any{"maildir_path": path, "recipients": to})
+        _, err := http.Post(os.Getenv("TICKET_WEBHOOK"), "application/json", bytes.NewReader(body))
+        return err
+    }
+  README.md: |
+    # inbound
+
+    Needs port 25 reachable, a hostname with matching forward and reverse
+    DNS, and the maildir volume mounted. Sending servers retry, but they
+    retry against a host that is supposed to be there.

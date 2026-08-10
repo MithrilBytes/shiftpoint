@@ -1,0 +1,48 @@
+id: r2data-transformer-embedding-api
+origin: "An internal embedding service: FastAPI in front of a 1.3 GB BGE encoder that is loaded onto the GPU at import time and stays there. The endpoint is thin and stateless, but the machine it needs is chosen by the weights, so a request rate tells you nothing about what to rent."
+expect:
+  stage: model-runtime
+  flags: []
+files:
+  requirements.txt: |
+    fastapi==0.112.0
+    uvicorn[standard]==0.30.5
+    torch==2.4.0
+    transformers==4.44.0
+    sentence-transformers==3.0.1
+  app/main.py: |
+    from fastapi import FastAPI
+    from pydantic import BaseModel
+    from sentence_transformers import SentenceTransformer
+
+    encoder = SentenceTransformer("BAAI/bge-large-en-v1.5", device="cuda")
+    app = FastAPI()
+
+    class Batch(BaseModel):
+        texts: list[str]
+
+    @app.post("/embed")
+    def embed(batch: Batch):
+        vectors = encoder.encode(
+            batch.texts, batch_size=32, normalize_embeddings=True
+        )
+        return {"dim": vectors.shape[1], "vectors": vectors.tolist()}
+
+    @app.get("/healthz")
+    def healthz():
+        return {"model": "bge-large-en-v1.5"}
+  Dockerfile: |
+    FROM nvidia/cuda:12.4.1-cudnn-runtime-ubuntu22.04
+    RUN apt-get update && apt-get install -y python3-pip
+    COPY requirements.txt .
+    RUN pip3 install -r requirements.txt
+    COPY app app
+    CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  README.md: |
+    # embeddings
+
+    One endpoint, `POST /embed`. The encoder is 1.34 GB of weights and wants
+    about 4 GB of VRAM with a batch of 32. It loads once at startup because
+    loading it per request takes 40 seconds.
+
+    On CPU the same call takes 90x longer, so this only ever runs on a GPU box.

@@ -1,0 +1,76 @@
+id: r2stack-perl-cgi-staff-directory
+origin: >-
+  A university department's staff directory, still running as a Perl CGI script
+  under Apache the way it has since about 2003. Apache forks the script per
+  request, it reads a pipe delimited flat file that the registry exports each
+  night, and prints HTML. No database, no framework, and nothing that runs
+  anywhere except a machine with Apache and mod_cgi configured for it.
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  cgi-bin/directory.cgi: |
+    #!/usr/bin/perl
+    use strict;
+    use warnings;
+    use CGI;
+
+    my $q = CGI->new;
+    my $letter = uc($q->param('letter') || 'A');
+    $letter =~ s/[^A-Z]//g;
+
+    open my $fh, '<', '/srv/directory/data/staff.txt'
+        or die "cannot read staff.txt: $!";
+
+    print $q->header('text/html; charset=utf-8');
+    print $q->start_html("Staff directory: $letter");
+    print "<table>\n";
+
+    while (my $line = <$fh>) {
+        chomp $line;
+        my ($surname, $forename, $ext, $room, $email) = split /\|/, $line;
+        next unless uc(substr($surname, 0, 1)) eq $letter;
+        print "<tr><td>$surname, $forename</td><td>$ext</td>"
+            . "<td>$room</td><td><a href=\"mailto:$email\">$email</a></td></tr>\n";
+    }
+
+    close $fh;
+    print "</table>\n";
+    print $q->end_html;
+  cgi-bin/search.cgi: |
+    #!/usr/bin/perl
+    use strict;
+    use warnings;
+    use CGI;
+
+    my $q = CGI->new;
+    my $term = lc($q->param('q') || '');
+
+    print $q->header('text/plain; charset=utf-8');
+    exit unless length $term >= 2;
+
+    open my $fh, '<', '/srv/directory/data/staff.txt' or die $!;
+    while (my $line = <$fh>) {
+        print $line if index(lc($line), $term) >= 0;
+    }
+    close $fh;
+  apache/directory.conf: |
+    ScriptAlias /directory/ /srv/directory/cgi-bin/
+
+    <Directory "/srv/directory/cgi-bin">
+        Options +ExecCGI
+        AddHandler cgi-script .cgi
+        Require all granted
+    </Directory>
+  data/staff.txt: |
+    Ashcroft|Jane|2140|G12|j.ashcroft@example.ac.uk
+    Bewley|Tom|2288|G04|t.bewley@example.ac.uk
+    Okonkwo|Ada|2301|H21|a.okonkwo@example.ac.uk
+  README.md: |
+    # directory
+
+    Departmental staff directory.
+
+    Drop `apache/directory.conf` into `conf.d`, restart Apache, and make sure
+    the two `.cgi` files are mode 755. The registry export drops a fresh
+    `staff.txt` in at 04:00.

@@ -1,0 +1,91 @@
+id: r2mixed-fork-adds-release-config
+origin: >-
+  A company fork of an upstream Go command line tool. Not one line of the tool
+  itself was changed. The fork exists so the platform team can ship an internal
+  build with their own defaults baked in, so the diff against upstream is a
+  goreleaser config, a Makefile and a defaults file. The repository is still
+  the same CLI it was before the fork.
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  FORK.md: |
+    # About this fork
+
+    Forked from `upstream/redactor` at tag v2.4.1. The only files we have
+    added are `.goreleaser.yaml`, `Makefile` and `defaults.yaml`. We rebase on
+    upstream every release rather than carrying patches, so please send
+    behaviour changes to upstream, not here.
+  go.mod: |
+    module github.com/acme-platform/redactor
+
+    go 1.22
+
+    require (
+    	github.com/spf13/cobra v1.8.1
+    	gopkg.in/yaml.v3 v3.0.1
+    )
+  main.go: |
+    package main
+
+    import (
+    	"fmt"
+    	"os"
+
+    	"github.com/spf13/cobra"
+    )
+
+    func main() {
+    	root := &cobra.Command{Use: "redactor", Short: "Strip secrets out of log files"}
+    	root.AddCommand(scanCmd())
+    	if err := root.Execute(); err != nil {
+    		fmt.Fprintln(os.Stderr, err)
+    		os.Exit(1)
+    	}
+    }
+  internal/scan/scan.go: |
+    package scan
+
+    import "regexp"
+
+    var patterns = []*regexp.Regexp{
+    	regexp.MustCompile(`AKIA[0-9A-Z]{16}`),
+    	regexp.MustCompile(`(?i)bearer\s+[a-z0-9._-]{20,}`),
+    }
+
+    func Redact(line string) string {
+    	for _, p := range patterns {
+    		line = p.ReplaceAllString(line, "[redacted]")
+    	}
+    	return line
+    }
+  defaults.yaml: |
+    # Baked into the internal build so nobody has to remember the flags.
+    report_url: https://redactor-reports.acme.internal/ingest
+    fail_on_match: true
+    exclude:
+      - "**/vendor/**"
+  .goreleaser.yaml: |
+    builds:
+      - main: .
+        binary: redactor
+        goos: [linux, darwin]
+        goarch: [amd64, arm64]
+    archives:
+      - format: tar.gz
+    release:
+      disable: true
+    blobs:
+      - provider: s3
+        bucket: acme-internal-tools
+  Makefile: |
+    .PHONY: build snapshot install
+
+    build:
+    	go build -o bin/redactor .
+
+    snapshot:
+    	goreleaser release --snapshot --clean
+
+    install:
+    	go install .

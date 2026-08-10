@@ -1,0 +1,65 @@
+id: r2mixed-vendored-flask-app
+origin: >-
+  A small Flask app for a hobby community that vendors an abandoned third party
+  SDK under `vendor/` because the upstream package was yanked from PyPI. Half
+  the files in the repo are somebody else's code. The app itself is one form
+  and one HTTP call out: no database, no queue, nothing kept between requests.
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  requirements.txt: |
+    Flask==3.0.3
+    gunicorn==22.0.0
+    requests==2.32.3
+    # brewlog-sdk is vendored under vendor/, see VENDOR.md
+  app.py: |
+    from flask import Flask, render_template, request
+    from vendor.brewlog_sdk.client import BrewlogClient
+
+    app = Flask(__name__)
+    client = BrewlogClient(base_url="https://api.brewlog.example")
+
+    @app.get("/")
+    def form():
+        return render_template("form.html")
+
+    @app.post("/lookup")
+    def lookup():
+        beer = client.search(request.form["query"])
+        return render_template("result.html", beer=beer)
+  vendor/brewlog_sdk/__init__.py: |
+    __version__ = "1.6.2"
+    # Vendored copy of brewlog-sdk 1.6.2. Do not edit except to apply the
+    # timeout patch documented in VENDOR.md.
+  vendor/brewlog_sdk/client.py: |
+    import requests
+
+    class BrewlogClient:
+        def __init__(self, base_url, timeout=10):
+            self.base_url = base_url
+            self.timeout = timeout
+
+        def search(self, query):
+            r = requests.get(f"{self.base_url}/v1/search", params={"q": query}, timeout=self.timeout)
+            r.raise_for_status()
+            return r.json()
+  VENDOR.md: |
+    `brewlog-sdk` was removed from PyPI in March when the maintainer deleted
+    their account. `vendor/brewlog_sdk` is a copy of the last release from our
+    lockfile cache, with one change: `timeout` now defaults to 10 seconds
+    instead of never. If the SDK ever comes back, delete the folder and put it
+    back in requirements.
+  Procfile: |
+    web: gunicorn app:app --bind 0.0.0.0:$PORT
+  templates/form.html: |
+    <form method="post" action="/lookup">
+      <input name="query" placeholder="Beer name" required>
+      <button type="submit">Look up</button>
+    </form>
+  README.md: |
+    # brewlookup
+
+    A one page lookup form the homebrew club uses. Free to use, nothing to log
+    in to, nothing stored: every request goes straight out to the Brewlog API
+    and the answer is rendered and forgotten.

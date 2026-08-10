@@ -1,0 +1,121 @@
+id: r2infra-helm-chart-repository-no-app
+origin: "A published chart repository. Two charts, versioned independently, released by chart-releaser to a gh-pages index that other teams add with `helm repo add`. There is no application source anywhere in it: the charts point at images built elsewhere. The charts are the product."
+expect:
+  stage: library
+  flags: []
+files:
+  README.md: |
+    # acme charts
+
+        helm repo add acme https://acme.github.io/charts
+        helm repo update
+        helm install shipper acme/log-shipper --version 2.4.0
+
+    | chart | version | app version |
+    | ----- | ------- | ----------- |
+    | log-shipper | 2.4.0 | 1.19.2 |
+    | redis-proxy | 0.7.1 | 0.11.0 |
+
+    Charts only. The images they reference are built in their own repositories.
+  charts/log-shipper/Chart.yaml: |
+    apiVersion: v2
+    name: log-shipper
+    description: Ships node logs to the aggregator
+    type: application
+    version: 2.4.0
+    appVersion: "1.19.2"
+    maintainers:
+      - name: platform
+        email: platform@acme.co
+  charts/log-shipper/values.yaml: |
+    image:
+      repository: ghcr.io/acme/log-shipper
+      tag: ""
+
+    aggregator:
+      endpoint: ""
+      tlsSecret: ""
+
+    tolerations:
+      - operator: Exists
+
+    resources:
+      requests:
+        cpu: 50m
+        memory: 96Mi
+  charts/log-shipper/templates/daemonset.yaml: |
+    apiVersion: apps/v1
+    kind: DaemonSet
+    metadata:
+      name: {{ .Release.Name }}
+    spec:
+      selector:
+        matchLabels:
+          app: {{ .Release.Name }}
+      template:
+        metadata:
+          labels:
+            app: {{ .Release.Name }}
+        spec:
+          tolerations: {{ toYaml .Values.tolerations | nindent 8 }}
+          containers:
+            - name: shipper
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              env:
+                - name: AGGREGATOR_ENDPOINT
+                  value: {{ required "aggregator.endpoint is required" .Values.aggregator.endpoint | quote }}
+              volumeMounts:
+                - name: varlog
+                  mountPath: /var/log
+                  readOnly: true
+          volumes:
+            - name: varlog
+              hostPath:
+                path: /var/log
+  charts/redis-proxy/Chart.yaml: |
+    apiVersion: v2
+    name: redis-proxy
+    description: Connection pooling proxy in front of a managed Redis
+    type: application
+    version: 0.7.1
+    appVersion: "0.11.0"
+  charts/redis-proxy/templates/deployment.yaml: |
+    apiVersion: apps/v1
+    kind: Deployment
+    metadata:
+      name: {{ .Release.Name }}
+    spec:
+      replicas: {{ .Values.replicaCount | default 2 }}
+      selector:
+        matchLabels:
+          app: {{ .Release.Name }}
+      template:
+        metadata:
+          labels:
+            app: {{ .Release.Name }}
+        spec:
+          containers:
+            - name: proxy
+              image: "{{ .Values.image.repository }}:{{ .Values.image.tag | default .Chart.AppVersion }}"
+              ports:
+                - containerPort: 6379
+  .github/workflows/release.yml: |
+    name: release charts
+    on:
+      push:
+        branches: [main]
+    jobs:
+      release:
+        runs-on: ubuntu-latest
+        permissions:
+          contents: write
+        steps:
+          - uses: actions/checkout@v4
+            with:
+              fetch-depth: 0
+          - uses: azure/setup-helm@v4
+          - name: Lint every chart
+            run: helm lint charts/*
+          - uses: helm/chart-releaser-action@v1.6.0
+            env:
+              CR_TOKEN: ${{ secrets.GITHUB_TOKEN }}

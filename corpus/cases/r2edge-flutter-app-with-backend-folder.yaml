@@ -1,0 +1,75 @@
+id: r2edge-flutter-app-with-backend-folder
+origin: "A Flutter recipe app with a small FastAPI service in backend/ that keeps the shared recipe list in Postgres. The mobile code is most of the repository, but the only thing anybody hosts is the folder you notice last. The API is plain request and response, and the compose file exists so the author can work on a train."
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: [composed-stack-that-runs-free]
+files:
+  pubspec.yaml: |
+    name: pantry
+    description: Shared recipes for a household.
+    environment:
+      sdk: ">=3.3.0 <4.0.0"
+    dependencies:
+      flutter:
+        sdk: flutter
+      http: ^1.2.0
+  lib/main.dart: |
+    import 'package:flutter/material.dart';
+    import 'package:http/http.dart' as http;
+
+    const api = String.fromEnvironment('API_URL');
+
+    void main() => runApp(const PantryApp());
+
+    Future<String> fetchRecipes() async =>
+        (await http.get(Uri.parse('$api/recipes'))).body;
+  backend/requirements.txt: |
+    fastapi==0.110.0
+    uvicorn[standard]==0.29.0
+    sqlalchemy==2.0.29
+    psycopg[binary]==3.1.18
+  backend/app/main.py: |
+    import os
+
+    from fastapi import FastAPI
+    from sqlalchemy import create_engine, text
+
+    app = FastAPI()
+    engine = create_engine(os.environ["DATABASE_URL"], pool_pre_ping=True)
+
+
+    @app.get("/recipes")
+    def recipes():
+        with engine.connect() as conn:
+            rows = conn.execute(text("select id, title from recipes order by title"))
+            return [dict(row._mapping) for row in rows]
+  backend/Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /srv
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY app app
+    CMD ["uvicorn", "app.main:app", "--host", "0.0.0.0", "--port", "8000"]
+  backend/docker-compose.yml: |
+    services:
+      api:
+        build: .
+        ports: ["8000:8000"]
+        environment:
+          DATABASE_URL: postgresql+psycopg://pantry:pantry@db:5432/pantry
+        depends_on: [db]
+      db:
+        image: postgres:16
+        environment:
+          POSTGRES_USER: pantry
+          POSTGRES_PASSWORD: pantry
+          POSTGRES_DB: pantry
+        volumes: ["pgdata:/var/lib/postgresql/data"]
+    volumes:
+      pgdata:
+  README.md: |
+    # pantry
+
+    Flutter app in `lib/`, a read mostly API in `backend/`. Two households use
+    it. `docker compose up` inside `backend/` for local work; in production
+    the API is one container and the database is managed.

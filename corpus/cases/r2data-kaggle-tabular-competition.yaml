@@ -1,0 +1,67 @@
+id: r2data-kaggle-tabular-competition
+origin: "One person's Kaggle repository for a tabular playground competition: exploratory notebooks, a LightGBM baseline, and the submission CSVs that came out of them. The deliverable is a file uploaded to a leaderboard. Training happens in a Kaggle kernel or on the author's laptop, and there is nothing here that anyone would ever host."
+expect:
+  stage: notebook
+  flags: []
+files:
+  requirements.txt: |
+    pandas==2.2.2
+    numpy==2.0.1
+    scikit-learn==1.5.1
+    lightgbm==4.5.0
+    matplotlib==3.9.1
+  notebooks/01-eda.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 2,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import pandas as pd\n", "train = pd.read_csv('../input/train.csv')\n", "train['target'].value_counts(normalize=True)"]
+      },
+      {
+       "cell_type": "markdown",
+       "metadata": {},
+       "source": ["Target is 3.1 percent positive. Folds have to be stratified."]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  notebooks/02-lgbm-baseline.ipynb: |
+    {
+     "cells": [
+      {
+       "cell_type": "code",
+       "execution_count": 11,
+       "metadata": {},
+       "outputs": [],
+       "source": ["import lightgbm as lgb\n", "import pandas as pd\n", "from sklearn.model_selection import StratifiedKFold\n", "from sklearn.metrics import roc_auc_score\n", "\n", "train = pd.read_csv('../input/train.csv')\n", "X = train.drop(columns=['id', 'target'])\n", "y = train['target']\n", "folds = StratifiedKFold(n_splits=5, shuffle=True, random_state=17)\n", "scores = []\n", "for tr, va in folds.split(X, y):\n", "    model = lgb.LGBMClassifier(n_estimators=800, learning_rate=0.03)\n", "    model.fit(X.iloc[tr], y.iloc[tr])\n", "    scores.append(roc_auc_score(y.iloc[va], model.predict_proba(X.iloc[va])[:, 1]))\n", "print(sum(scores) / len(scores))"]
+      }
+     ],
+     "metadata": {"kernelspec": {"display_name": "Python 3", "name": "python3"}},
+     "nbformat": 4,
+     "nbformat_minor": 5
+    }
+  submissions/sub-004-lgbm-5fold.csv: |
+    id,target
+    900001,0.0142
+    900002,0.2210
+    900003,0.0077
+  .gitignore: |
+    input/
+    *.ckpt
+  README.md: |
+    # playground-s4e6
+
+    Notes and notebooks for the June playground competition.
+
+    | submission | cv | public LB |
+    | ---------- | ---- | ---- |
+    | 002 logistic | 0.771 | 0.769 |
+    | 004 lgbm 5 fold | 0.843 | 0.839 |
+
+    `input/` is the competition data and is not committed. Submit with
+    `kaggle competitions submit -f submissions/sub-004-lgbm-5fold.csv`.

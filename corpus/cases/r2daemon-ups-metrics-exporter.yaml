@@ -1,0 +1,86 @@
+id: r2daemon-ups-metrics-exporter
+origin: "A Prometheus exporter for the UPS units in two comms rooms. A ticker polls each unit every fifteen seconds and keeps counters that only mean anything if they have been counting since the process started; /metrics just prints whatever the poller has accumulated. Nothing is stored off the process."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  go.mod: |
+    module github.com/estate/ups-exporter
+
+    go 1.22
+
+    require github.com/prometheus/client_golang v1.19.1
+  main.go: |
+    package main
+
+    import (
+        "log"
+        "net/http"
+        "strings"
+        "os"
+
+        "github.com/prometheus/client_golang/prometheus/promhttp"
+    )
+
+    func main() {
+        units := strings.Split(os.Getenv("UPS_HOSTS"), ",")
+        go Poll(units)
+
+        http.Handle("/metrics", promhttp.Handler())
+        log.Fatal(http.ListenAndServe(":9182", nil))
+    }
+  poller.go: |
+    package main
+
+    import (
+        "encoding/json"
+        "net/http"
+        "time"
+
+        "github.com/prometheus/client_golang/prometheus"
+        "github.com/prometheus/client_golang/prometheus/promauto"
+    )
+
+    var (
+        charge = promauto.NewGaugeVec(prometheus.GaugeOpts{
+            Name: "ups_battery_charge_ratio",
+        }, []string{"unit"})
+
+        transfers = promauto.NewCounterVec(prometheus.CounterOpts{
+            Name: "ups_transfers_to_battery_total",
+        }, []string{"unit"})
+    )
+
+    type reading struct {
+        Charge    float64 `json:"charge"`
+        OnBattery bool    `json:"on_battery"`
+    }
+
+    func Poll(units []string) {
+        was := map[string]bool{}
+        for range time.Tick(15 * time.Second) {
+            for _, unit := range units {
+                var r reading
+                resp, err := http.Get("http://" + unit + "/status.json")
+                if err != nil {
+                    continue
+                }
+                json.NewDecoder(resp.Body).Decode(&r)
+                resp.Body.Close()
+
+                charge.WithLabelValues(unit).Set(r.Charge)
+                if r.OnBattery && !was[unit] {
+                    transfers.WithLabelValues(unit).Inc()
+                }
+                was[unit] = r.OnBattery
+            }
+        }
+    }
+  .env.example: |
+    UPS_HOSTS=ups-a.comms1.internal,ups-b.comms2.internal
+  README.md: |
+    # ups-exporter
+
+    Scrape :9182. The transfer counter is only correct while the process has
+    been watching without a gap, so restarting it loses the count and putting
+    it somewhere that sleeps between scrapes makes it useless.

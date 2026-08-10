@@ -1,0 +1,104 @@
+id: r2daemon-matrix-bridge-postgres
+origin: "An application service that bridges a Matrix room to a company XMPP server. It registers with the homeserver, holds a client session on each side and keeps the puppet user and room mappings in Postgres, because the mapping table is the only thing that makes a restart survivable."
+expect:
+  stage: app-with-managed-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "xmpp-matrix-bridge",
+      "private": true,
+      "scripts": { "start": "node src/index.js" },
+      "dependencies": {
+        "matrix-appservice-bridge": "^10.3.0",
+        "@xmpp/client": "^0.13.1",
+        "pg": "^8.12.0"
+      }
+    }
+  src/index.js: |
+    const { Bridge } = require("matrix-appservice-bridge");
+    const { connectXmpp } = require("./xmpp");
+    const store = require("./store");
+
+    const bridge = new Bridge({
+      homeserverUrl: process.env.HOMESERVER_URL,
+      domain: process.env.HOMESERVER_DOMAIN,
+      registration: "registration.yaml",
+      controller: {
+        onEvent: async (request) => {
+          const event = request.getData();
+          if (event.type !== "m.room.message") return;
+          const jid = await store.jidForRoom(event.room_id);
+          if (jid) xmpp.sendChat(jid, event.content.body);
+        },
+      },
+    });
+
+    const xmpp = connectXmpp(async (from, body) => {
+      const roomId = await store.roomForJid(from);
+      const intent = bridge.getIntent(await store.puppetFor(from));
+      await intent.sendText(roomId, body);
+    });
+
+    store.migrate().then(() => bridge.run(9000));
+  src/store.js: |
+    const { Pool } = require("pg");
+
+    const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+
+    exports.migrate = () =>
+      pool.query(`CREATE TABLE IF NOT EXISTS links (
+        room_id text primary key,
+        jid text unique not null,
+        puppet_mxid text not null
+      )`);
+
+    exports.jidForRoom = async (roomId) =>
+      (await pool.query("SELECT jid FROM links WHERE room_id = $1", [roomId])).rows[0]?.jid;
+
+    exports.roomForJid = async (jid) =>
+      (await pool.query("SELECT room_id FROM links WHERE jid = $1", [jid])).rows[0]?.room_id;
+
+    exports.puppetFor = async (jid) =>
+      (await pool.query("SELECT puppet_mxid FROM links WHERE jid = $1", [jid])).rows[0]?.puppet_mxid;
+  src/xmpp.js: |
+    const { client, xml } = require("@xmpp/client");
+
+    exports.connectXmpp = (onChat) => {
+      const conn = client({
+        service: process.env.XMPP_SERVICE,
+        username: process.env.XMPP_USER,
+        password: process.env.XMPP_PASSWORD,
+      });
+
+      conn.on("stanza", (stanza) => {
+        if (!stanza.is("message")) return;
+        const body = stanza.getChildText("body");
+        if (body) onChat(stanza.attrs.from.split("/")[0], body);
+      });
+
+      conn.start();
+      return {
+        sendChat: (to, body) =>
+          conn.send(xml("message", { to, type: "chat" }, xml("body", {}, body))),
+      };
+    };
+  registration.yaml: |
+    id: xmpp-bridge
+    url: http://bridge:9000
+    sender_localpart: xmppbot
+    namespaces:
+      users:
+        - exclusive: true
+          regex: "@xmpp_.*"
+  .env.example: |
+    HOMESERVER_URL=https://matrix.example.org
+    HOMESERVER_DOMAIN=example.org
+    DATABASE_URL=postgres://bridge@localhost/bridge
+    XMPP_SERVICE=xmpps://chat.example.org
+  README.md: |
+    # xmpp-matrix-bridge
+
+    Both sides are persistent sessions, so the bridge is a process that stays
+    up. The link table has to be a real database: if it is lost, every ghost
+    user in every room is orphaned.

@@ -1,0 +1,64 @@
+id: r2daemon-scrapyd-crawl-daemon
+origin: "A jobs board crawler packaged the way scrapy shops usually deploy one: the spiders are eggified and pushed to a scrapyd daemon that stays up on port 6800, supervises the crawl processes and keeps the feed files on its own disk. What you host is the daemon, not the spider."
+expect:
+  stage: app-needing-a-server
+  flags: []
+files:
+  requirements.txt: |
+    Scrapy==2.11.2
+    scrapyd==1.4.3
+    scrapyd-client==1.2.3
+  scrapy.cfg: |
+    [settings]
+    default = boards.settings
+
+    [deploy:production]
+    url = http://crawler.internal:6800/
+    project = boards
+  scrapyd.conf: |
+    [scrapyd]
+    bind_address = 0.0.0.0
+    http_port    = 6800
+    max_proc     = 4
+    eggs_dir     = /var/lib/scrapyd/eggs
+    logs_dir     = /var/lib/scrapyd/logs
+    items_dir    = /var/lib/scrapyd/items
+    jobs_to_keep = 20
+  boards/settings.py: |
+    BOT_NAME = "boards"
+    SPIDER_MODULES = ["boards.spiders"]
+    ROBOTSTXT_OBEY = True
+    AUTOTHROTTLE_ENABLED = True
+    FEEDS = {"file:///var/lib/scrapyd/items/%(name)s-%(time)s.jsonl": {"format": "jsonlines"}}
+  boards/spiders/postings.py: |
+    import scrapy
+
+    class PostingsSpider(scrapy.Spider):
+        name = "postings"
+        start_urls = ["https://example-jobs.test/roles"]
+
+        def parse(self, response):
+            for row in response.css("li.posting"):
+                yield {
+                    "title": row.css("h2::text").get(),
+                    "company": row.css(".company::text").get(),
+                    "url": response.urljoin(row.css("a::attr(href)").get()),
+                }
+            nxt = response.css("a.next::attr(href)").get()
+            if nxt:
+                yield response.follow(nxt, self.parse)
+  Dockerfile: |
+    FROM python:3.12-slim
+    WORKDIR /app
+    COPY requirements.txt .
+    RUN pip install --no-cache-dir -r requirements.txt
+    COPY scrapyd.conf /etc/scrapyd/scrapyd.conf
+    COPY . .
+    EXPOSE 6800
+    CMD ["scrapyd"]
+  README.md: |
+    # boards
+
+    `scrapyd-deploy production` pushes an egg; crawls are started by posting
+    to `/schedule.json`. The daemon has to be up for either of those to work,
+    and it is the thing holding the eggs, the logs and the item feeds.

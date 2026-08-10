@@ -1,0 +1,30 @@
+id: r2infra-procfile-only-web-app
+origin: "A debugging aid somebody deploys and forgets: it echoes back whatever webhook body it is sent so you can see what a vendor is actually posting. The whole repository is the platform manifest and the process definition. One web process, a Node buildpack, no add-ons, nothing written down anywhere."
+expect:
+  stage: app-on-free-managed-hosting
+  flags: []
+files:
+  Procfile: |
+    web: node server.js
+  app.json: |
+    {
+      "name": "webhook-echo",
+      "description": "Echoes back any webhook body so you can see what a vendor posts",
+      "keywords": ["debugging", "webhooks"],
+      "buildpacks": [{ "url": "heroku/nodejs" }],
+      "formation": {
+        "web": { "quantity": 1 }
+      },
+      "env": {
+        "LOG_LEVEL": { "value": "info" },
+        "MAX_BODY_BYTES": { "value": "65536" }
+      }
+    }
+  README.md: |
+    # webhook-echo
+
+        git push heroku main
+
+    Point a vendor's webhook at the app URL and read the log. One web process,
+    no add-ons, nothing persisted. Restarting it loses nothing because there is
+    nothing to lose.

@@ -1,0 +1,102 @@
+id: r2cli-rust-ratatui-tui
+origin: "A terminal user interface for browsing git history, built with ratatui and crossterm. It takes over the terminal, loops on key events until the user presses q, and restores the screen. The loop is long lived but it lives in the user's own terminal, so there is no process for anyone to host."
+expect:
+  stage: command-line-tool
+  flags: []
+files:
+  Cargo.toml: |
+    [package]
+    name = "logscape"
+    version = "0.3.0"
+    edition = "2021"
+    description = "A terminal UI for browsing commit history"
+    license = "MIT"
+
+    [dependencies]
+    ratatui = "0.26"
+    crossterm = "0.27"
+    git2 = "0.18"
+    clap = { version = "4.5", features = ["derive"] }
+  src/main.rs: |
+    use std::io;
+
+    use clap::Parser;
+    use crossterm::{event, execute, terminal};
+    use ratatui::{backend::CrosstermBackend, Terminal};
+
+    mod ui;
+
+    #[derive(Parser)]
+    struct Args {
+        /// Repository to browse
+        #[arg(default_value = ".")]
+        path: String,
+    }
+
+    fn main() -> io::Result<()> {
+        let args = Args::parse();
+        terminal::enable_raw_mode()?;
+        let mut out = io::stdout();
+        execute!(out, terminal::EnterAlternateScreen)?;
+        let mut term = Terminal::new(CrosstermBackend::new(out))?;
+
+        let mut app = ui::App::open(&args.path);
+        loop {
+            term.draw(|f| ui::render(f, &app))?;
+            if let event::Event::Key(key) = event::read()? {
+                if app.on_key(key.code) {
+                    break;
+                }
+            }
+        }
+
+        terminal::disable_raw_mode()?;
+        execute!(term.backend_mut(), terminal::LeaveAlternateScreen)?;
+        Ok(())
+    }
+  src/ui.rs: |
+    use crossterm::event::KeyCode;
+    use ratatui::{widgets::{Block, Borders, List, ListItem}, Frame};
+
+    pub struct App {
+        pub commits: Vec<String>,
+        pub selected: usize,
+    }
+
+    impl App {
+        pub fn open(path: &str) -> Self {
+            let repo = git2::Repository::open(path).expect("not a repository");
+            let mut walk = repo.revwalk().unwrap();
+            walk.push_head().unwrap();
+            let commits = walk
+                .filter_map(|id| repo.find_commit(id.ok()?).ok())
+                .map(|c| format!("{:.7} {}", c.id(), c.summary().unwrap_or("")))
+                .collect();
+            Self { commits, selected: 0 }
+        }
+
+        /// Returns true when the user asked to quit.
+        pub fn on_key(&mut self, key: KeyCode) -> bool {
+            match key {
+                KeyCode::Char('q') | KeyCode::Esc => true,
+                KeyCode::Down => { self.selected = (self.selected + 1).min(self.commits.len() - 1); false }
+                KeyCode::Up => { self.selected = self.selected.saturating_sub(1); false }
+                _ => false,
+            }
+        }
+    }
+
+    pub fn render(frame: &mut Frame, app: &App) {
+        let items: Vec<ListItem> = app.commits.iter().map(|c| ListItem::new(c.as_str())).collect();
+        let list = List::new(items).block(Block::default().borders(Borders::ALL).title("commits"));
+        frame.render_widget(list, frame.size());
+    }
+  README.md: |
+    # logscape
+
+    ```
+    cargo install logscape
+    logscape ~/src/kernel
+    ```
+
+    Arrow keys move, `q` quits and puts your terminal back the way it was.

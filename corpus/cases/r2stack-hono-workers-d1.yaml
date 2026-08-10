@@ -1,0 +1,74 @@
+id: r2stack-hono-workers-d1
+origin: >-
+  Somebody's personal reading list, written as a Hono app deployed to
+  Cloudflare Workers with a D1 database bound to it. The handlers run per
+  request with nothing kept alive between them, and the rows live in D1. A
+  small app and a small database, both of which sit inside the free tiers.
+expect:
+  stage: app-on-free-managed-hosting-with-database
+  flags: []
+files:
+  package.json: |
+    {
+      "name": "shelf",
+      "private": true,
+      "scripts": {
+        "dev": "wrangler dev",
+        "deploy": "wrangler deploy"
+      },
+      "dependencies": { "hono": "^4.5.0" },
+      "devDependencies": { "wrangler": "^3.70.0" }
+    }
+  wrangler.toml: |
+    name = "shelf"
+    main = "src/index.ts"
+    compatibility_date = "2024-07-01"
+
+    [[d1_databases]]
+    binding = "DB"
+    database_name = "shelf"
+    database_id = "7e0a1c2c-6b5f-4a9f-9f0e-2a1d8f3c4b55"
+  src/index.ts: |
+    import { Hono } from "hono";
+
+    type Env = { Bindings: { DB: D1Database } };
+
+    const app = new Hono<Env>();
+
+    app.get("/books", async (c) => {
+      const { results } = await c.env.DB.prepare(
+        "select id, title, author, finished_on from books order by finished_on desc",
+      ).all();
+      return c.json(results);
+    });
+
+    app.get("/books/:id", async (c) => {
+      const row = await c.env.DB.prepare("select * from books where id = ?")
+        .bind(c.req.param("id"))
+        .first();
+      return row ? c.json(row) : c.notFound();
+    });
+
+    app.post("/books", async (c) => {
+      const body = await c.req.json<{ title: string; author: string }>();
+      await c.env.DB.prepare("insert into books (title, author) values (?, ?)")
+        .bind(body.title, body.author)
+        .run();
+      return c.json({ ok: true }, 201);
+    });
+
+    export default app;
+  schema.sql: |
+    create table books (
+      id integer primary key autoincrement,
+      title text not null,
+      author text not null,
+      finished_on text
+    );
+
+    create index books_finished on books (finished_on);
+  README.md: |
+    # shelf
+
+    Books I have read. `npx wrangler d1 execute shelf --file schema.sql` once,
+    then `npm run deploy`.
