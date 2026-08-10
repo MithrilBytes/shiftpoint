@@ -18,11 +18,12 @@ const rules = loadRules(RULES_DIR);
  * vocabulary should be something somebody decided, not something that drifted.
  */
 const VOCABULARY: Record<string, string[]> = {
-  language: ["node", "python", "ruby", "go", "none"],
+  language: ["node", "python", "ruby", "go", "php", "elixir", "java", "none"],
   framework: [
     "nextjs", "express", "fastify", "koa", "hono", "nestjs", "astro", "nuxt",
     "sveltekit", "remix", "flask", "django", "fastapi", "rails", "sinatra",
-    "chi", "gin", "echo", "fiber", "static", "unknown",
+    "chi", "gin", "echo", "fiber", "laravel", "symfony", "slim", "phoenix",
+    "spring-boot", "ktor", "static", "unknown",
   ],
   shape: ["service", "notebook", "static", "cli", "library", "script", "unknown"],
   apps: ["one", "several"],
@@ -36,8 +37,8 @@ const VOCABULARY: Record<string, string[]> = {
   ],
   serverless_fit: ["fits", "blocked"],
   blocked_by: [
-    "background_work", "held_connections", "long_running", "model_runtime",
-    "heavy_runtime", "local_disk", "none",
+    "background_work", "held_connections", "heavy_runtime", "model_runtime",
+    "local_disk", "no_free_tier_runtime", "prebuilt_image", "none",
   ],
   commercial: ["yes", "unclear"],
   assets: ["light", "heavy"],

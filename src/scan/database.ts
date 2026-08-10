@@ -5,6 +5,7 @@ import {
   goDependencies,
   manifestFiles,
   nodeDependencies,
+  otherLanguageSources,
   pythonDependencies,
   rubyDependencies,
 } from "./manifest.js";
@@ -13,6 +14,20 @@ const PRISMA_SCHEMA = /(^|\/)schema\.prisma$/;
 const DRIZZLE_CONFIG = /(^|\/)drizzle\.config\.[cm]?[jt]s$/;
 const ENV_EXAMPLE = /(^|\/)\.env(\.example|\.sample|\.template)?$/;
 const PYTHON_SOURCE = /\.py$/;
+const ELIXIR_SOURCE = /\.exs?$/;
+const SPRING_CONFIG = /(^|\/)application(-[^/]+)?\.(properties|ya?ml)$/;
+
+// Laravel names its connection in .env and nowhere a dependency list can show
+// it: the driver is a PHP extension, not a composer package.
+const LARAVEL_CONNECTION = /^\s*DB_CONNECTION\s*=\s*["']?([a-z0-9]+)/im;
+
+// Spring names its database in the JDBC URL, whichever of the two config
+// formats the project uses.
+const JDBC_URL = /jdbc:([a-z0-9]+):/gi;
+
+// Ecto names its adapter in the repo module, the same way Django names its
+// engine in settings. Neither is a dependency, and neither is guessable.
+const ECTO_ADAPTER = /Ecto\.Adapters\.(Postgres|MyXQL|SQLite3|Tds)/g;
 
 // Django declares its database in settings, not in a dependency. Nothing else
 // in the repository names it: sqlite3 is in the standard library and the ORM
@@ -52,6 +67,26 @@ export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["mongoose", "mongo"],
   ["pymongo", "mongo"],
   ["mongoid", "mongo"],
+  // Elixir. Ecto talks to a database through one of these drivers, and the
+  // driver is named in mix.exs even when the adapter is not.
+  ["postgrex", "postgres"],
+  ["myxql", "mysql"],
+  ["ecto_sqlite3", "sqlite"],
+  ["exqlite", "sqlite"],
+  // JVM. A pom names the group and the artifact, and either half can be the
+  // half that says which database this is.
+  ["org.postgresql", "postgres"],
+  ["mysql-connector-j", "mysql"],
+  ["mysql-connector-java", "mysql"],
+  ["mariadb-java-client", "mysql"],
+  ["mongodb-driver-sync", "mongo"],
+  ["sqlite-jdbc", "sqlite"],
+  // PHP. The driver is a PHP extension, and a composer.json that requires one
+  // is naming the database.
+  ["ext-pdo_pgsql", "postgres"],
+  ["ext-pdo_mysql", "mysql"],
+  ["ext-pdo_sqlite", "sqlite"],
+  ["ext-mongodb", "mongo"],
 ]);
 
 // Scanning source files is the expensive path, so it is bounded.
@@ -99,6 +134,11 @@ export function detectDatabase(repo: Repo): Signal[] {
   for (const name of goDependencies(repo)) {
     note(ENGINE_BY_ALIAS.get(name), `go.mod requires ${name}`);
   }
+  for (const [names, phrase] of otherLanguageSources(repo)) {
+    for (const name of names) {
+      note(ENGINE_BY_ALIAS.get(name), `${phrase} ${name}`);
+    }
+  }
 
   for (const file of repo.matching(PYTHON_SOURCE).slice(0, MAX_SOURCE_FILES_SCANNED)) {
     const text = repo.read(file) ?? "";
@@ -121,6 +161,25 @@ export function detectDatabase(repo: Repo): Signal[] {
     }
   }
 
+  for (const file of repo.matching(ELIXIR_SOURCE).slice(0, MAX_SOURCE_FILES_SCANNED)) {
+    const text = repo.read(file) ?? "";
+    for (const match of text.matchAll(ECTO_ADAPTER)) {
+      const adapter = (match[1] ?? "").toLowerCase();
+      // SQL Server has no place on this ladder, so it is read and set aside
+      // rather than folded into an engine it is not.
+      if (adapter === "tds") continue;
+      const engine = adapter === "postgres" ? "postgres" : adapter === "myxql" ? "mysql" : "sqlite";
+      note(engine, `${file} sets the Ecto ${match[1]} adapter`);
+    }
+  }
+
+  for (const file of repo.matching(SPRING_CONFIG)) {
+    const text = repo.read(file) ?? "";
+    for (const match of text.matchAll(JDBC_URL)) {
+      note(ENGINE_BY_ALIAS.get((match[1] ?? "").toLowerCase()), `${file} sets a jdbc:${match[1]} url`);
+    }
+  }
+
   const compose = composeServices(repo);
   for (const image of compose?.images ?? []) {
     const name = (image.split("/").pop() ?? "").split(":")[0] ?? "";
@@ -132,6 +191,13 @@ export function detectDatabase(repo: Repo): Signal[] {
     const match = /DATABASE_URL\s*=\s*["']?([a-z0-9+]+):/i.exec(text);
     if (match) {
       note(ENGINE_BY_ALIAS.get((match[1] ?? "").toLowerCase()), `${file} sets a ${match[1]} DATABASE_URL`);
+    }
+    const connection = LARAVEL_CONNECTION.exec(text);
+    if (connection) {
+      note(
+        ENGINE_BY_ALIAS.get((connection[1] ?? "").toLowerCase()),
+        `${file} sets DB_CONNECTION to ${connection[1]}`,
+      );
     }
   }
 

@@ -1,11 +1,15 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import {
+  composerFiles,
   gemfiles,
   goDependencies,
   goModFiles,
+  jvmBuildFiles,
   manifestFiles,
+  mixFiles,
   nodeDependencies,
+  otherLanguageSources,
   packageJsonFiles,
   pythonDependencies,
   pythonManifestFiles,
@@ -144,6 +148,19 @@ export const FRAMEWORK_BY_DEPENDENCY = new Map<string, string>([
   ["gin", "gin"],
   ["echo", "echo"],
   ["fiber", "fiber"],
+  // PHP, keeping the vendor prefix composer.json writes
+  ["laravel/framework", "laravel"],
+  ["laravel/lumen-framework", "laravel"],
+  ["symfony/framework-bundle", "symfony"],
+  ["slim/slim", "slim"],
+  // Elixir
+  ["phoenix", "phoenix"],
+  // JVM, matched on the artifact that puts an HTTP server in the process. A
+  // starter that only wires up persistence or batch work is not a web
+  // application, so spring-boot-starter on its own does not appear here.
+  ["spring-boot-starter-web", "spring-boot"],
+  ["spring-boot-starter-webflux", "spring-boot"],
+  ["ktor-server-core", "ktor"],
 ]);
 
 /**
@@ -175,6 +192,22 @@ export function detectFramework(repo: Repo): Signal[] {
     languages.push("go");
     languageEvidence.push("go.mod");
   }
+  // Languages this tool identifies without being able to reason about them. A
+  // composer.json is as plain a statement of what a project runs on as a
+  // Gemfile is, and refusing to read it made the single most common shape of
+  // small web application on the planet invisible.
+  if (composerFiles(repo).length > 0) {
+    languages.push("php");
+    languageEvidence.push("composer.json");
+  }
+  if (mixFiles(repo).length > 0) {
+    languages.push("elixir");
+    languageEvidence.push("mix.exs");
+  }
+  if (jvmBuildFiles(repo).length > 0) {
+    languages.push("java");
+    languageEvidence.push(jvmBuildFiles(repo)[0] ?? "a JVM build file");
+  }
 
   // A manifest is the strongest evidence, but plenty of real projects are a
   // few source files and a virtual environment that is not checked in. Falling
@@ -198,6 +231,7 @@ export function detectFramework(repo: Repo): Signal[] {
     [pythonDependencies(repo), "a python manifest requires"],
     [rubyDependencies(repo), "Gemfile requires"],
     [goDependencies(repo), "go.mod requires"],
+    ...otherLanguageSources(repo),
   ];
 
   for (const [names, phrase] of sources) {

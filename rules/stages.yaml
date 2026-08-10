@@ -217,7 +217,7 @@ stages:
 
   - id: known-language-only
     when:
-      language: [node, python, ruby, go]
+      language: [node, python, ruby, go, php, elixir, java]
     confidence: low
     # An abstention. The tool understood nothing here, so it is in no position
     # to affirm that nothing needs changing.
@@ -233,4 +233,4 @@ stages:
     do_nothing: false
     stage: "We could not tell what this repository runs, so we cannot price it"
     headroom: "No headroom estimate. There was not enough in this repository to base one on."
-    tripwire: "Add a dependency file (package.json, requirements.txt, Gemfile, go.mod) and run this again."
+    tripwire: "Add a dependency file (package.json, requirements.txt, Gemfile, go.mod, composer.json, mix.exs, pom.xml) and run this again."

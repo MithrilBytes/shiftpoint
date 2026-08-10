@@ -1,8 +1,9 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectDatabase } from "./database.js";
+import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
-import { declaredDependencies, runtimeDependencies } from "./manifest.js";
+import { declaredDependencies, deployedImages, runtimeDependencies } from "./manifest.js";
 
 // Dependencies that need a process that outlives a request.
 //
@@ -113,6 +114,20 @@ export const HEAVY_RUNTIME = new Set([
 ]);
 
 /**
+ * Languages the free managed tiers do not run.
+ *
+ * The free plans this tool prices against, Cloudflare Workers and Vercel's
+ * Hobby plan, run JavaScript and Python. None of them takes a PHP application,
+ * a JVM service, or a BEAM release, so "a free tier covers this" is not an
+ * answer available to these at any traffic level. What they need is a process
+ * on a machine of their own, which is the next rung down and a price this tool
+ * can give.
+ *
+ * This is about where the code can run, not about the language.
+ */
+export const NO_FREE_TIER_RUNTIME = new Set(["php", "java", "elixir"]);
+
+/**
  * Whether this could run on a serverless or managed free tier, and if not, what
  * stops it.
  *
@@ -158,6 +173,24 @@ export function detectServerless(repo: Repo): Signal[] {
   if (heavy.length > 0) {
     blockers.push(`${heavy.join(", ")} is too large to cold start in a free function tier`);
     kinds.push("heavy_runtime");
+  }
+
+  // The runtime itself can be what rules the free tier out. This is read from
+  // the manifest, so it is the same class of evidence as the rest.
+  const languages = detectFramework(repo).find((signal) => signal.kind === "language")?.values ?? [];
+  const unsupported = languages.filter((name) => NO_FREE_TIER_RUNTIME.has(name)).sort();
+  if (unsupported.length > 0) {
+    blockers.push(`the free managed tiers do not run ${unsupported.join(", ")}`);
+    kinds.push("no_free_tier_runtime");
+  }
+
+  // A repository that holds no code of its own, and a compose file pinning
+  // somebody else's image, is a deployment. What it deploys is a container that
+  // stays up, which is not a thing a function tier sells.
+  const deployed = deployedImages(repo);
+  if (deployed.length > 0) {
+    blockers.push(`a compose file runs ${deployed.join(", ")} from a prebuilt image`);
+    kinds.push("prebuilt_image");
   }
 
   // A file database is written to local disk, which a function does not keep.

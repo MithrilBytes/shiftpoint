@@ -14,6 +14,14 @@ const GEMFILE = /(^|\/)Gemfile$/;
 const GO_MOD = /(^|\/)go\.mod$/;
 const COMPOSE = /(^|\/)(docker-)?compose\.ya?ml$/;
 
+// Manifests this tool reads to identify a project rather than to reason about
+// it. It runs none of these languages and resolves none of their dependency
+// trees. It reads the one line each file uses to name the framework and the
+// database driver, which is the same thing it reads a Gemfile for.
+const COMPOSER_JSON = /(^|\/)composer\.json$/;
+const MIX_EXS = /(^|\/)mix\.exs$/;
+const JVM_BUILD = /(^|\/)(pom\.xml|build\.gradle(\.kts)?)$/;
+
 /** Every dependency manifest in the repository, whatever the language. */
 export function manifestFiles(repo: Repo): string[] {
   return repo.files.filter(
@@ -22,7 +30,10 @@ export function manifestFiles(repo: Repo): string[] {
       REQUIREMENTS.test(file) ||
       PYPROJECT.test(file) ||
       GEMFILE.test(file) ||
-      GO_MOD.test(file),
+      GO_MOD.test(file) ||
+      COMPOSER_JSON.test(file) ||
+      MIX_EXS.test(file) ||
+      JVM_BUILD.test(file),
   );
 }
 
@@ -44,6 +55,98 @@ export function pythonManifestFiles(repo: Repo): string[] {
 
 export function composeFiles(repo: Repo): string[] {
   return repo.matching(COMPOSE);
+}
+
+export function composerFiles(repo: Repo): string[] {
+  return repo.matching(COMPOSER_JSON);
+}
+
+export function mixFiles(repo: Repo): string[] {
+  return repo.matching(MIX_EXS);
+}
+
+export function jvmBuildFiles(repo: Repo): string[] {
+  return repo.matching(JVM_BUILD);
+}
+
+/**
+ * Package names from every composer.json. Names keep their vendor prefix,
+ * because that is how PHP names a package and how the manifest spells it:
+ * laravel/framework, not framework.
+ */
+export function composerDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const file of composerFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+    let parsed: unknown;
+    try {
+      parsed = JSON.parse(text.replace(/^﻿/, ""));
+    } catch {
+      continue;
+    }
+    if (typeof parsed !== "object" || parsed === null) continue;
+    for (const key of ["require", "require-dev"]) {
+      const block = (parsed as Record<string, unknown>)[key];
+      if (typeof block !== "object" || block === null) continue;
+      for (const name of Object.keys(block)) names.add(name.toLowerCase());
+    }
+  }
+  return names;
+}
+
+/** Application names from every mix.exs: {:phoenix, "~> 1.7"} yields phoenix. */
+export function mixDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const file of mixFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+    for (const match of text.matchAll(/\{\s*:([a-z][a-z0-9_]*)\s*,/g)) {
+      names.add(match[1] ?? "");
+    }
+  }
+  return names;
+}
+
+/**
+ * Coordinates from every Maven pom and Gradle build file. Group and artifact
+ * are both kept, because either half can be the recognisable one:
+ * org.postgresql is the group, spring-boot-starter-web is the artifact.
+ *
+ * This is not dependency resolution. Nothing here follows a parent pom, reads a
+ * version catalogue, or expands a starter into what it pulls in.
+ */
+export function jvmDependencies(repo: Repo): Set<string> {
+  const names = new Set<string>();
+  for (const file of jvmBuildFiles(repo)) {
+    const text = repo.read(file);
+    if (text === undefined) continue;
+    for (const match of text.matchAll(/<(?:groupId|artifactId)>\s*([^<\s]+)\s*<\//g)) {
+      names.add((match[1] ?? "").toLowerCase());
+    }
+    // Gradle writes a coordinate as one quoted string, group:artifact:version.
+    for (const match of text.matchAll(/["']([\w.-]+:[\w.-]+(?::[^"']*)?)["']/g)) {
+      for (const part of (match[1] ?? "").toLowerCase().split(":")) {
+        if (part !== "") names.add(part);
+      }
+    }
+  }
+  return names;
+}
+
+/**
+ * The manifests of the languages this tool identifies but does not reason
+ * about, each paired with how to say where a name came from.
+ *
+ * Kept together so the framework and database detectors read them the same way,
+ * and so the list of languages in this position is one line to extend.
+ */
+export function otherLanguageSources(repo: Repo): Array<[Set<string>, string]> {
+  return [
+    [composerDependencies(repo), "composer.json requires"],
+    [mixDependencies(repo), "mix.exs requires"],
+    [jvmDependencies(repo), `${jvmBuildFiles(repo)[0] ?? "a JVM build file"} declares`],
+  ];
 }
 
 /** Every package.json that parses, paired with the path it came from. */
@@ -173,12 +276,16 @@ export function goDependencies(repo: Repo): Set<string> {
 
 /** Everything the repository declares it depends on, whatever the language. */
 export function declaredDependencies(repo: Repo): Set<string> {
-  return new Set([
+  const names = new Set([
     ...nodeDependencies(repo),
     ...pythonDependencies(repo),
     ...rubyDependencies(repo),
     ...goDependencies(repo),
   ]);
+  for (const [other] of otherLanguageSources(repo)) {
+    for (const name of other) names.add(name);
+  }
+  return names;
 }
 
 /** Gem names from every Gemfile. */
@@ -202,6 +309,8 @@ export interface ComposeServices {
   app: string[];
   infrastructure: string[];
   images: string[];
+  /** Application services that pull a prebuilt image instead of building one. */
+  deployed: string[];
 }
 
 /**
@@ -217,6 +326,7 @@ export function composeServices(repo: Repo): ComposeServices | undefined {
   const app: string[] = [];
   const infrastructure: string[] = [];
   const images: string[] = [];
+  const deployed: string[] = [];
   let parsedAny = false;
 
   for (const file of files) {
@@ -241,9 +351,27 @@ export function composeServices(repo: Repo): ComposeServices | undefined {
         infrastructure.push(name);
       } else {
         app.push(name);
+        // Built from source here, or pulled ready made. The difference says
+        // whether the application lives in this repository or somewhere else.
+        if (image !== undefined) deployed.push(name);
       }
     }
   }
 
-  return parsedAny ? { app, infrastructure, images } : undefined;
+  return parsedAny ? { app, infrastructure, images, deployed } : undefined;
+}
+
+/**
+ * Application services running a prebuilt image, in a repository that holds no
+ * dependency manifest of its own.
+ *
+ * A repository like that is not the application: it is the deployment of one.
+ * Small team and homelab self hosting looks exactly like this, a compose file
+ * pinning somebody else's image with the database it needs beside it. Requiring
+ * the absence of a manifest is what keeps this from firing on an ordinary
+ * project whose compose file happens to pin a tool alongside its own code.
+ */
+export function deployedImages(repo: Repo): string[] {
+  if (manifestFiles(repo).length > 0) return [];
+  return composeServices(repo)?.deployed ?? [];
 }
