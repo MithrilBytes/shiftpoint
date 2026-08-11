@@ -3,6 +3,24 @@ import type { Signal } from "../types.js";
 import { composeFiles, composeServices } from "./manifest.js";
 
 const DOCKERFILE = /(^|\/)Dockerfile(\.[^/]+)?$/;
+const EXPOSE = /^\s*EXPOSE\s+(\d+)/im;
+
+/**
+ * A port the repository's own image declares it listens on, or undefined.
+ *
+ * EXPOSE is the author stating, in the file that builds this code into an
+ * image, that the process inside it accepts connections. Nobody writes it for a
+ * command line tool or a batch job. It is read only from a Dockerfile and never
+ * from a compose file, because a Dockerfile builds this repository's source
+ * while a compose file may be pinning somebody else's image.
+ */
+export function exposedPort(repo: Repo): string | undefined {
+  for (const file of repo.matching(DOCKERFILE)) {
+    const match = EXPOSE.exec(repo.read(file) ?? "");
+    if (match) return `${file} exposes port ${match[1]}, so the image is built to be listened to`;
+  }
+  return undefined;
+}
 
 /**
  * How the application is packaged, plus how many services it is actually made

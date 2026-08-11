@@ -4,7 +4,10 @@ import { detectContainer } from "./container.js";
 import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
 import { detectOrchestration } from "./orchestration.js";
+import { exposedPort } from "./container.js";
 import {
+  heldOpenInSource,
+  IN_PROCESS_SCHEDULER,
   LONG_RUNNING_BATCH,
   PERSISTENT_CONNECTION,
   runtimeMatching,
@@ -158,12 +161,47 @@ export function detectShape(repo: Repo): Signal[] {
     ];
   }
 
+  // The same question asked of the code, for the repositories whose manifest
+  // does not answer it. A program that serves a websocket, or that opens a
+  // socket and accepts connections on it, is being connected to by somebody.
+  const inSource = heldOpenInSource(repo);
+  if (inSource !== undefined) {
+    return [signal("service", "high", inSource)];
+  }
+
+  // And of the file that packages it. A port in a Dockerfile is the author
+  // saying the process inside listens, which is the plainest statement a
+  // repository makes about being hosted. It is read before the batch runtime
+  // below on purpose: a repository holding both a crawler and the daemon that
+  // supervises it is the daemon, and the exposed port is which of the two is
+  // the thing you run.
+  const exposed = exposedPort(repo);
+  if (exposed !== undefined) {
+    return [signal("service", "medium", exposed)];
+  }
+
   // A batch runtime is the opposite: it starts, works, and stops. That is a
   // program you run, not a service you host, whatever else is in the manifest.
   const batch = runtimeMatching(repo, LONG_RUNNING_BATCH);
   if (batch.length > 0) {
     return [
       signal("script", "high", `${batch.join(", ")} runs a batch job rather than serving requests`),
+    ];
+  }
+
+  // A scheduler in the process is the other kind of program that has to be left
+  // running. Nothing connects to it, so it is not a service; it is a script
+  // whose timing dies with it. Saying "we could not tell" about a program whose
+  // whole design is "start it and walk away" was the wrong answer, and calling
+  // it a service would have priced it as one.
+  const scheduled = runtimeMatching(repo, IN_PROCESS_SCHEDULER);
+  if (scheduled.length > 0) {
+    return [
+      signal(
+        "script",
+        "high",
+        `${scheduled.join(", ")} keeps the schedule inside the process, so the program runs on rather than being triggered`,
+      ),
     ];
   }
 

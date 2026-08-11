@@ -6,6 +6,7 @@ import { detectJobs, QUEUE_BY_DEPENDENCY } from "../src/scan/jobs.js";
 import {
   detectServerless,
   HEAVY_RUNTIME,
+  IN_PROCESS_SCHEDULER,
   LONG_RUNNING_BATCH,
   MODEL_RUNTIME,
   PERSISTENT_CONNECTION,
@@ -130,6 +131,21 @@ describe("every serverless blocker in the table blocks", () => {
     });
   }
 
+  for (const dependency of IN_PROCESS_SCHEDULER) {
+    it(`${dependency} blocks on a schedule inside the process`, () => {
+      const blocked = manifestsFor(dependency).some((files) =>
+        withRepo(files, (repo) => {
+          const signals = detectServerless(repo);
+          return (
+            values(signals, "serverless_fit").includes("blocked") &&
+            values(signals, "blocked_by").includes("in_process_schedule")
+          );
+        }),
+      );
+      expect(blocked).toBe(true);
+    });
+  }
+
   for (const dependency of LONG_RUNNING_BATCH) {
     it(`${dependency} blocks on a run that outlasts a function`, () => {
       const blocked = manifestsFor(dependency).some((files) =>
@@ -168,6 +184,60 @@ describe("the sets that decide shape as well as fit", () => {
       expect(values(detectShape(repo), "shape")).toEqual(["script"]);
       expect(values(detectServerless(repo), "serverless_fit")).toEqual(["blocked"]);
     });
+  });
+
+  it("reads a scheduler in the process as a script that has to be left running", () => {
+    // Nobody connects to a price watcher, so it is not a service. The schedule
+    // living inside it is still what rules out a function tier.
+    withRepo({ "requirements.txt": "APScheduler==3.10.4\nrequests==2.32.3\n" }, (repo) => {
+      expect(values(detectShape(repo), "shape")).toEqual(["script"]);
+      expect(values(detectServerless(repo), "blocked_by")).toEqual(["in_process_schedule"]);
+    });
+  });
+
+  it("reads a socket the code accepts connections on as something you host", () => {
+    // No framework and no dependency says so. The code does: it owns the
+    // socket and speaks its own protocol over it, which no function tier hands
+    // to a handler.
+    withRepo(
+      {
+        "go.mod": "module example.com/realm\n\ngo 1.22\n",
+        "main.go":
+          'package main\n\nimport "net"\n\nfunc main() {\n\tl, _ := net.Listen("tcp", ":7777")\n\tfor {\n\t\tc, _ := l.Accept()\n\t\tgo serve(c)\n\t}\n}\n',
+      },
+      (repo) => {
+        expect(values(detectShape(repo), "shape")).toEqual(["service"]);
+        expect(values(detectServerless(repo), "blocked_by")).toEqual(["held_connections"]);
+      },
+    );
+  });
+
+  it("leaves an ordinary HTTP server on the tiers it fits", () => {
+    // The same file without an accept loop is a request and response service.
+    // Reading a listener alone as a held connection would have priced every
+    // stdlib HTTP service as a server it does not need.
+    withRepo(
+      {
+        "go.mod": "module example.com/api\n\ngo 1.22\n",
+        "main.go":
+          'package main\n\nimport "net/http"\n\nfunc main() {\n\thttp.HandleFunc("/", index)\n\thttp.ListenAndServe(":8080", nil)\n}\n',
+      },
+      (repo) => {
+        expect(values(detectServerless(repo), "serverless_fit")).toEqual(["fits"]);
+      },
+    );
+  });
+
+  it("reads a port in a Dockerfile as the author saying the image listens", () => {
+    withRepo(
+      {
+        "requirements.txt": "Scrapy==2.11.2\nscrapyd==1.4.3\n",
+        Dockerfile: "FROM python:3.12-slim\nCOPY . .\nEXPOSE 6800\nCMD [\"scrapyd\"]\n",
+      },
+      (repo) => {
+        expect(values(detectShape(repo), "shape")).toEqual(["service"]);
+      },
+    );
   });
 
   it("leaves a published package alone even when it depends on one of them", () => {

@@ -50,6 +50,11 @@ const ECTO_ADAPTER = /Ecto\.Adapters\.(Postgres|MyXQL|SQLite3|Tds)/g;
 const DJANGO_ENGINE = /django\.db\.backends\.(sqlite3|postgresql[_a-z]*|mysql)/g;
 
 // Maps every name this detector understands onto the engine's vocabulary.
+//
+// An async driver names the same engine its synchronous counterpart does.
+// aiosqlite is sqlite, aiomysql is mysql, motor is mongo. Missing them read a
+// bot that keeps every member's score in a file on local disk as having no
+// database at all, which is the one deployment detail that loses the data.
 export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["postgresql", "postgres"],
   ["postgres", "postgres"],
@@ -58,6 +63,7 @@ export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["psycopg2", "postgres"],
   ["psycopg2-binary", "postgres"],
   ["asyncpg", "postgres"],
+  ["aiopg", "postgres"],
   ["pgx", "postgres"],
   ["pq", "postgres"],
   ["postgres.js", "postgres"],
@@ -68,10 +74,13 @@ export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["mysql2", "mysql"],
   ["mysqlclient", "mysql"],
   ["pymysql", "mysql"],
+  ["aiomysql", "mysql"],
+  ["asyncmy", "mysql"],
   ["mariadb", "mysql"],
   ["@planetscale/database", "mysql"],
   ["sqlite", "sqlite"],
   ["sqlite3", "sqlite"],
+  ["aiosqlite", "sqlite"],
   ["better-sqlite3", "sqlite"],
   ["@libsql/client", "sqlite"],
   ["libsql", "sqlite"],
@@ -79,6 +88,7 @@ export const ENGINE_BY_ALIAS = new Map<string, string>([
   ["mongo", "mongo"],
   ["mongoose", "mongo"],
   ["pymongo", "mongo"],
+  ["motor", "mongo"],
   ["mongoid", "mongo"],
   // Elixir. Ecto talks to a database through one of these drivers, and the
   // driver is named in mix.exs even when the adapter is not.

@@ -7,31 +7,108 @@ import { declaredDependencies, deployedImages, runtimeDependencies } from "./man
 
 // Dependencies that need a process that outlives a request.
 //
-// Chat clients belong here for the same reason a websocket server does. A bot
-// opens one gateway connection at startup and holds it for the life of the
-// process; nothing routes a request to it, and there is no version of that
-// which fits in a function invocation.
+// The test for membership is one question: does this library exist to hold a
+// network connection open for the life of the process? A bot opens one gateway
+// connection at startup and holds it until it stops; nothing routes a request
+// to it, and there is no version of that which fits in a function invocation.
+// The same is true of a websocket transport, a peer to peer node, a watch on
+// somebody else's API, and a dashboard server that keeps each open tab's state
+// behind a socket.
+//
+// It is not a list of libraries that are merely slow, large, or asynchronous.
+// Those are different findings with different answers, and they have their own
+// sets below.
 export const PERSISTENT_CONNECTION = new Set([
+  // Websocket and long poll transports. The connection is the product.
   "socket.io",
   "ws",
   "uwebsockets.js",
+  // gorilla/websocket and nhooyr.io/websocket both normalise to this segment.
+  "websocket",
+  "websockets",
+  "websocket-client",
+  "express-ws",
+  "@fastify/websocket",
   "channels",
   "django-channels",
   "actioncable",
   "faye",
   "pusher",
   "centrifuge",
+  // Chat and protocol gateways. One login at startup, held until the process
+  // stops, with the far end pushing whenever it likes.
   "discord.js",
   "discord.py",
   "discordpy",
+  "discordrb",
+  "nextcord",
+  "disnake",
+  "py-cord",
+  "hikari",
   "telegraf",
   "grammy",
   "python-telegram-bot",
+  "pytelegrambotapi",
+  "aiogram",
+  "telethon",
+  "pyrogram",
   "@slack/bolt",
+  "@slack/socket-mode",
   "slack-bolt",
   "slack_bolt",
   "irc",
+  "cinch",
   "matrix-bot-sdk",
+  "matrix-appservice-bridge",
+  "matrix-nio",
+  "@xmpp/client",
+  "slixmpp",
+  "sleekxmpp",
+  // Peer to peer nodes. A node is only in the network while it is dialled in.
+  "libp2p",
+  // Watchers on somebody else's API. An operator or a controller holds a watch
+  // stream open and reacts to what comes down it, which is a loop that never
+  // returns rather than a request that is answered.
+  "controller-runtime",
+  "kopf",
+  // Dashboard servers that keep each session in the process behind a socket.
+  // These are not request and response: closing the process drops every open
+  // tab, and a second copy of it would not know what the first one was showing.
+  "streamlit",
+  "gradio",
+  "dash",
+  "panel",
+  "bokeh",
+  "voila",
+  "nicegui",
+  "solara",
+]);
+
+/**
+ * Dependencies that put the schedule inside the process.
+ *
+ * A program with its own scheduler has to keep running for its timing to
+ * happen: there is no cron entry and nothing external wakes it. That rules out
+ * a free function tier for the same reason a held connection does.
+ *
+ * It says nothing about shape, though, and that is the point of keeping it
+ * apart. Nobody connects to a price watcher. It is still a script; it is a
+ * script that has to be left running, which is a cheaper answer than a service
+ * and an honest one.
+ */
+export const IN_PROCESS_SCHEDULER = new Set([
+  "apscheduler",
+  "schedule",
+  "rocketry",
+  "node-cron",
+  "node-schedule",
+  "toad-scheduler",
+  "croner",
+  // The npm package and robfig/cron, which normalises to this segment.
+  "cron",
+  "gocron",
+  "rufus-scheduler",
+  "clockwork",
 ]);
 
 /**
@@ -54,6 +131,70 @@ export const LONG_RUNNING_BATCH = new Set(["scrapy", "crawlee", "apify"]);
  */
 export function runtimeMatching(repo: Repo, names: ReadonlySet<string>): string[] {
   return [...runtimeDependencies(repo)].filter((name) => names.has(name)).sort();
+}
+
+// Source files that say how a program starts. Scanning them is the expensive
+// path, so it is bounded the same way the database detector bounds its own.
+const PROGRAM_SOURCE = /\.(py|[cm]?[jt]sx?|rb|go|rs|java|kt|exs?|php)$/;
+const MAX_SOURCE_FILES_SCANNED = 200;
+
+// Tests, in every naming convention that matters. A test opens a socket to
+// exercise something else and closes it again, so it describes no deployment of
+// its own. This is the reasoning the walker already applies to fixtures and
+// examples, applied here to the files those conventions leave in place.
+const TEST_SOURCE =
+  /(^|\/)(tests?|specs?|__tests__)\/|\.(test|spec)\.[^/]+$|_test\.[^/]+$|_spec\.[^/]+$|(^|\/)test_[^/]+$/;
+
+/**
+ * How each ecosystem spells "serve a websocket".
+ *
+ * A websocket endpoint is a connection this process holds for as long as the
+ * client is on the other end of it, which is the same finding a websocket
+ * dependency gives, read out of the code instead of the manifest. It is worth
+ * reading separately because the transport is often built into the framework:
+ * Bun, Deno and Elysia declare a socket route with no dependency to name.
+ */
+const SERVES_WEBSOCKETS =
+  /\bnew\s+websocket(?:server|\.server)\s*\(|\bupgrader\.upgrade\s*\(|\bwebsocket\.accept\s*\(|\.ws\s*\(\s*["'`]\/|@\w+\.websocket\s*\(|\bwebsocket_urlpatterns\b|\bio\.on\s*\(\s*["'`]connection["'`]/;
+
+/**
+ * A socket the program listens on and accepts connections from itself.
+ *
+ * Both halves are required, and together they mean something an HTTP server
+ * does not do: this code owns the socket and speaks its own protocol over it.
+ * A framework that calls net.Listen and hands the listener to an HTTP server
+ * never calls Accept, so it does not match. Nothing that owns a socket can run
+ * on a function tier, which delivers a request to a handler and never a
+ * connection.
+ */
+const OPENS_A_LISTENER =
+  /\bnet\.listen\s*\(|\btcplistener::bind\s*\(|\btcpserver\.new\s*\(|\bsocket\.socket\s*\(|\bnew\s+serversocket\s*\(/;
+const ACCEPTS_CONNECTIONS = /\.accept\s*\(\s*\)|\.incoming\s*\(\s*\)/;
+
+/**
+ * A connection this repository's own code holds open, or undefined when there
+ * is none. Reported as one sentence naming the file it was read from.
+ *
+ * Exported because the same fact answers two questions: whether there is
+ * something to host here at all, and whether a function tier could host it.
+ * Both have to read it the same way, which is why neither reads it alone.
+ */
+export function heldOpenInSource(repo: Repo): string | undefined {
+  const sources = repo.matching(PROGRAM_SOURCE).filter((file) => !TEST_SOURCE.test(file));
+  for (const file of sources.slice(0, MAX_SOURCE_FILES_SCANNED)) {
+    const raw = repo.read(file);
+    if (raw === undefined) continue;
+    // Matched against lowercased source. Every ecosystem capitalises these
+    // names differently, and the answer does not depend on which one this is.
+    const text = raw.toLowerCase();
+    if (SERVES_WEBSOCKETS.test(text)) {
+      return `${file} serves a websocket, which is a connection held open for as long as the client is there`;
+    }
+    if (OPENS_A_LISTENER.test(text) && ACCEPTS_CONNECTIONS.test(text)) {
+      return `${file} listens on a socket and accepts connections itself, so it speaks its own protocol rather than answering requests`;
+    }
+  }
+  return undefined;
 }
 
 /**
@@ -128,7 +269,6 @@ export const HEAVY_RUNTIME = new Set([
 export const NO_FREE_TIER_RUNTIME = new Set(["php", "java", "elixir", "dotnet", "perl"]);
 
 // Scanning source files is the expensive path, so it is bounded.
-const MAX_SOURCE_FILES_SCANNED = 200;
 
 const PHP_SOURCE = /\.php$/;
 // A PHP page that touches the request is answering one. Nothing else in the
@@ -210,6 +350,23 @@ export function detectServerless(repo: Repo): Signal[] {
   if (held.length > 0) {
     blockers.push(`${held.join(", ")} holds connections open`);
     kinds.push("held_connections");
+  }
+
+  // The same finding read out of the code. A repository can hold a connection
+  // open with nothing in its manifest to say so, because the transport came
+  // with the runtime or the socket is opened by hand.
+  const inSource = held.length === 0 ? heldOpenInSource(repo) : undefined;
+  if (inSource !== undefined) {
+    blockers.push(inSource);
+    kinds.push("held_connections");
+  }
+
+  const scheduled = [...dependencies].filter((name) => IN_PROCESS_SCHEDULER.has(name)).sort();
+  if (scheduled.length > 0) {
+    blockers.push(
+      `${scheduled.join(", ")} keeps the schedule inside the process, so it only runs while the process does`,
+    );
+    kinds.push("in_process_schedule");
   }
 
   const batch = [...dependencies].filter((name) => LONG_RUNNING_BATCH.has(name)).sort();
