@@ -5,15 +5,19 @@
 # Set a little under the last honest measurement so ordinary noise does not turn
 # the build red.
 #
-# 2026-08-08: dropped from 0.70/0.65 after the corpus grew from 121 cases to
-# 226. The tool did not get worse. The corpus got harder: the first 121 cases
-# leaned toward web applications and static sites, and the 105 added after them
-# are command line tools, bots, daemons, and stacks in languages this tool has
-# only just learned to read. 57.8% on cases it has never been tuned against is
-# what it actually scores.
+# 2026-08-08: dropped to 0.74/0.55 when the corpus grew from 121 cases to 226.
+# The tool did not get worse, the corpus got harder.
+#
+# 2026-08-08, later: raised to 0.94/0.68 after teaching the tool Rust, .NET,
+# Deno, Perl and plain PHP, what marks a program people install, and what marks
+# a process that runs forever without a web framework. Holdout went from 57.8%
+# to 71.9%, so most of that generalised.
+#
+# The 24 point gap between the two splits is the number to watch. It is what
+# fitting to the tune cases looks like, and it should close, not widen.
 tune:
-  stage: 0.74
+  stage: 0.94
   flags: 0.94
 holdout:
-  stage: 0.55
+  stage: 0.68
   flags: 0.93
