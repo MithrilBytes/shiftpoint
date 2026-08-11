@@ -98,6 +98,24 @@ the tool:
 Do nothing today.
 ```
 
+## How accurate it is
+
+Measured against 226 hand labelled repositories in `corpus/`. Cases are split
+into tune and holdout by hashing the case id, so nobody picks which side a case
+falls on.
+
+| Split | Stage | Flags | Cases |
+| --- | --- | --- | --- |
+| Tune, which the tool is iterated against | 96.3% | 96.3% | 162 |
+| Holdout, which it is not | 71.9% | 95.3% | 64 |
+
+Holdout is the number that describes a repository nobody has looked at. Roughly
+five verdicts in seven name the right tier, and about 19 in 20 get the flags
+right.
+
+The 24 point gap between the splits is the figure to watch. It is what fitting
+to the tune cases looks like, and it should close rather than widen.
+
 ## Install
 
 Requires Node 20 or newer.
@@ -259,24 +277,6 @@ Ordered roughly by how much each one would improve an answer today.
 
 Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
 kind, hosting provider integrations, config files, and a plugin system.
-
-## How accurate it is
-
-Measured against 226 hand labelled repositories in `corpus/`. Cases are split
-into tune and holdout by hashing the case id, so nobody picks which side a case
-falls on.
-
-| Split | Stage | Flags | Cases |
-| --- | --- | --- | --- |
-| Tune, which the tool is iterated against | 96.3% | 96.3% | 162 |
-| Holdout, which it is not | 71.9% | 95.3% | 64 |
-
-Holdout is the number that describes a repository nobody has looked at. Roughly
-five verdicts in seven name the right tier, and about 19 in 20 get the flags
-right.
-
-The 24 point gap between the splits is the figure to watch. It is what fitting
-to the tune cases looks like, and it should close rather than widen.
 
 ## Known limits
 

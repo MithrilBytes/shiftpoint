@@ -1,0 +1,512 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>shiftpoint</title>
+    <meta name="description" content="Reads a repository and says what infrastructure it needs, starting at the free tiers." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9 6v20M23 6v20M9 16h14' stroke='%23a8623c' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='6' r='4' fill='%23a8623c'/%3E%3C/svg%3E" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1c1917;
+        --dim: #57534e;
+        --paper: #faf9f7;
+        --panel: #f2efeb;
+        --line: #e0dbd4;
+        --mark: #a8623c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #ede9e4;
+          --dim: #a8a29e;
+          --paper: #16140f;
+          --panel: #201d17;
+          --line: #33302a;
+          --mark: #d08a5c;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0 1.25rem 6rem;
+        background: var(--paper);
+        color: var(--ink);
+        font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 46rem; margin-inline: auto; }
+
+      header.hero {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 4rem 0 1rem;
+        flex-wrap: wrap;
+      }
+      header.hero svg { width: 54px; height: 54px; flex: none; }
+      .name { font-size: 2.1rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
+      .version {
+        font: 500 0.8rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--mark);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.35rem 0.6rem;
+        margin-left: auto;
+      }
+      .tagline { color: var(--dim); font-size: 1.15rem; margin: 0 0 2.5rem; max-width: 34rem; }
+
+      h2 {
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+        margin: 3rem 0 0.75rem;
+        padding-top: 1.75rem;
+        border-top: 1px solid var(--line);
+      }
+      h3 { font-size: 1.05rem; margin: 2rem 0 0.5rem; }
+      p, li { color: var(--ink); }
+      a { color: var(--mark); text-underline-offset: 2px; }
+
+      pre {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font: 0.85rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+      p code, li code, td code {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      pre code { background: none; border: 0; padding: 0; }
+
+      .scroll { overflow-x: auto; }
+      table { border-collapse: collapse; width: 100%; font-size: 0.92rem; margin: 1rem 0; }
+      th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--dim); font-weight: 600; white-space: nowrap; }
+
+      blockquote { margin: 1rem 0; padding-left: 1rem; border-left: 3px solid var(--line); color: var(--dim); }
+      hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
+      ul { padding-left: 1.15rem; }
+      li { margin: 0.3rem 0; }
+      li input[type="checkbox"] { margin-right: 0.4rem; }
+
+      footer {
+        margin-top: 4rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+        color: var(--dim);
+        font-size: 0.88rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <!-- A shift gate. The dot is the point you shift at. -->
+        <svg viewBox="0 0 32 32" role="img" aria-label="shiftpoint">
+          <path
+            d="M9 6v20M23 6v20M9 16h14"
+            stroke="var(--mark)"
+            stroke-width="3"
+            fill="none"
+            stroke-linecap="round"
+          />
+          <circle cx="23" cy="6" r="4.5" fill="var(--mark)" />
+        </svg>
+        <h1 class="name">shiftpoint</h1>
+        <span class="version">v0.1.0</span>
+      </header>
+
+      <p class="tagline">Point shiftpoint at a repository and it tells you what infrastructure that repository actually needs: whether a free tier covers it, what would push you off that free tier, and what you are already paying for that nothing in the code asks for.</p>
+
+      <h2>What it provides</h2>
+<h3>The question it answers</h3>
+<p>What can I run inside a free tier before I have to start paying for cloud, and
+what specifically would push me over that line.</p>
+<p>Alongside that, the reverse: what is in this repository that costs money or
+attention with nothing in the code to justify it.</p>
+<h3>What it reads</h3>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>Detector</th>
+<th>Reads</th>
+<th>Answers</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Language and framework</td>
+<td><code>package.json</code>, <code>requirements.txt</code>, <code>pyproject.toml</code>, <code>Pipfile</code>, <code>setup.py</code>, <code>Gemfile</code>, <code>go.mod</code>, <code>Cargo.toml</code>, <code>composer.json</code>, <code>mix.exs</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>deno.json</code>, <code>*.csproj</code>, and source file extensions</td>
+<td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 38 web frameworks across them</td>
+</tr>
+<tr>
+<td>Shape</td>
+<td>Notebooks, bin entries, console scripts, published entry points, source layout</td>
+<td>Is this a service, a notebook, a library, a command line tool, a script, or a static site</td>
+</tr>
+<tr>
+<td>Serverless fit</td>
+<td>Queue libraries, socket and gateway clients, in process schedulers, machine learning runtimes, local file databases, runtimes no free tier offers</td>
+<td>Can this run on a free function tier, and if not, which of eight reasons stops it</td>
+</tr>
+<tr>
+<td>Database</td>
+<td>Prisma schemas, Drizzle configs, dependency manifests, compose images, <code>DATABASE_URL</code>, Laravel, Ecto and Spring configuration, Entity Framework</td>
+<td>Postgres, MySQL, SQLite, Mongo, D1, or none</td>
+</tr>
+<tr>
+<td>Commercial</td>
+<td>Payment processors, business tooling, pricing and checkout routes</td>
+<td>Whether the free plans are licensed for what you are doing</td>
+</tr>
+<tr>
+<td>Applications</td>
+<td>Manifests that declare a web framework, per directory</td>
+<td>How many separately deployable apps live here</td>
+</tr>
+<tr>
+<td>Container</td>
+<td><code>Dockerfile</code>, <code>docker-compose.yml</code></td>
+<td>How it is packaged, and how many services it is really made of</td>
+</tr>
+<tr>
+<td>Orchestration</td>
+<td>Kubernetes manifests by shape, Helm charts, Terraform</td>
+<td>What deployment machinery is checked in</td>
+</tr>
+<tr>
+<td>Background jobs</td>
+<td>Sidekiq, Resque, Celery, RQ, Dramatiq, BullMQ, asynq, and others</td>
+<td>Whether work happens outside the request cycle</td>
+</tr>
+<tr>
+<td>Static assets</td>
+<td>Images, video, audio, fonts, documents</td>
+<td>How much weight is checked in</td>
+</tr>
+<tr>
+<td>CI</td>
+<td>GitHub Actions, GitLab CI, CircleCI, Jenkins</td>
+<td>Which CI service, if any</td>
+</tr>
+</tbody></table></div>
+<p>Every signal carries a confidence level and the evidence behind it. A detector
+never guesses. When it finds nothing it says so, and it lowers its confidence
+when there was nothing to read in the first place.</p>
+<h3>What it can tell you</h3>
+<p>Sixteen verdicts, matched most specific first. Everything below comes from
+<code>rules/*.yaml</code>, so this table is data, not code.</p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>If your repository is</th>
+<th>The verdict is</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>A notebook, a library, or a command line tool</td>
+<td>There is nothing to host here</td>
+</tr>
+<tr>
+<td>Sized by a machine learning model it loads</td>
+<td>Deliberately not priced, because the cheapest servers cannot load it at all</td>
+</tr>
+<tr>
+<td>A static site</td>
+<td>Free static hosting, $0</td>
+</tr>
+<tr>
+<td>A script with nothing that must stay running</td>
+<td>A free function tier, $0</td>
+</tr>
+<tr>
+<td>A stateless service with no sign of a business</td>
+<td>A free managed tier, $0</td>
+</tr>
+<tr>
+<td>A stateless service with a database</td>
+<td>A free managed tier including the database, $0</td>
+</tr>
+<tr>
+<td>A stateless service that looks like a business</td>
+<td>About $20/mo, because the free plans are non commercial</td>
+</tr>
+<tr>
+<td>A service with a single file database</td>
+<td>One small always on server, $4 to $9/mo</td>
+</tr>
+<tr>
+<td>A service with a managed database</td>
+<td>A small server plus a managed database, $19 to $25/mo</td>
+</tr>
+<tr>
+<td>A service with background work</td>
+<td>An app server, a worker, and a database, $25 to $40/mo</td>
+</tr>
+<tr>
+<td>Something it cannot identify</td>
+<td>Said plainly, with no price attached</td>
+</tr>
+</tbody></table></div>
+<p>The downward detection sits on top of that: Kubernetes manifests or a Helm
+chart with no demand behind them, or a compose file describing a stack you rent
+servers for when a free tier would host the same thing.</p>
+<p>Demand comes only from what the application does, never from what the
+deployment configuration asks for. A replica count of 50 is an intention, not
+traffic, which is what lets the tool tell you a Kubernetes setup is unearned.</p>
+<h3>The verdict format</h3>
+<p>Every verdict has the same four fields, in the same order, whether you read it
+in the terminal, in INFRA.md, or as JSON.</p>
+<p><strong>Stage.</strong> What you need right now, with a price, or an explicit refusal to
+price it.</p>
+<p><strong>Headroom.</strong> Roughly how far that carries you.</p>
+<p><strong>Tripwire.</strong> The specific thing that means it is time to look again, and what
+the next step costs.</p>
+<p><strong>Flags.</strong> Spending and complexity the repository shows no demand for.</p>
+<p>Under those four is a confidence level. When confidence is low, it says so
+plainly rather than inventing a number. The same line carries caveats: things
+that make the answer fit less well, such as a repository holding several
+deployable applications when a verdict describes one system.</p>
+<p>When there is nothing worth changing, the verdict ends with the whole point of
+the tool:</p>
+<pre><code>Do nothing today.
+</code></pre>
+<h2>How accurate it is</h2>
+<p>Measured against 226 hand labelled repositories in <code>corpus/</code>. Cases are split
+into tune and holdout by hashing the case id, so nobody picks which side a case
+falls on.</p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>Split</th>
+<th>Stage</th>
+<th>Flags</th>
+<th>Cases</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Tune, which the tool is iterated against</td>
+<td>96.3%</td>
+<td>96.3%</td>
+<td>162</td>
+</tr>
+<tr>
+<td>Holdout, which it is not</td>
+<td>71.9%</td>
+<td>95.3%</td>
+<td>64</td>
+</tr>
+</tbody></table></div>
+<p>Holdout is the number that describes a repository nobody has looked at. Roughly
+five verdicts in seven name the right tier, and about 19 in 20 get the flags
+right.</p>
+<p>The 24 point gap between the splits is the figure to watch. It is what fitting
+to the tune cases looks like, and it should close rather than widen.</p>
+<h2>Install</h2>
+<p>Requires Node 20 or newer.</p>
+<p>shiftpoint is not on the npm registry and is not going there. It is distributed
+by clone, and the build refuses to publish.</p>
+<pre><code class="language-bash">git clone https://github.com/MithrilBytes/shiftpoint.git
+</code></pre>
+<pre><code class="language-bash">cd shiftpoint &amp;&amp; npm install &amp;&amp; npm run build
+</code></pre>
+<p>That gives you a working <code>dist/main.js</code>:</p>
+<pre><code class="language-bash">node dist/main.js /path/to/your/repo
+</code></pre>
+<p>To get a <code>shiftpoint</code> command on your PATH without a registry:</p>
+<pre><code class="language-bash">npm link
+</code></pre>
+<p>Every example below assumes you ran that. Without it, read <code>shiftpoint</code> as
+<code>node dist/main.js</code>.</p>
+<h2>Usage</h2>
+<pre><code class="language-bash">shiftpoint
+</code></pre>
+<pre><code>Stage:    A free managed tier covers this (est. $0/mo)
+Headroom: Cloudflare Workers allows 100,000 requests a day free, and
+          Vercel&#39;s free plan allows 100 GB of traffic a month, either
+          of which is a long way off for a new app
+Tripwire: Those free plans are licensed for personal, non commercial
+          use, so the day this becomes a business it is about $20/mo
+          whatever the traffic is doing. If you outgrow the request
+          limits first, the next step is about $5/mo.
+Flags:    Found Kubernetes manifests. The cluster alone is about
+          $73/mo before a single server to run on, with no signal you
+          need it yet.
+          Found a Helm chart. It manages releases across a fleet of
+          services, and this repository holds one.
+
+Confidence: medium. Some of this is inferred from what the repository
+does not contain.
+</code></pre>
+<p>Point it somewhere else, write the verdict into the repository, or get JSON:</p>
+<pre><code class="language-bash">shiftpoint ./some/repo
+</code></pre>
+<pre><code class="language-bash">shiftpoint --write
+</code></pre>
+<pre><code class="language-bash">shiftpoint --json
+</code></pre>
+<h2>Where the numbers come from</h2>
+<p>Every rule that quotes a dollar figure carries the source it came from and the
+date that source was read. A price without a source is a guess, and the test
+suite fails the build if a rule quotes money without citing one.</p>
+<p>Current figures were read on 2026-08-04:</p>
+<div class="scroll"><table>
+<thead>
+<tr>
+<th>Number</th>
+<th>Source</th>
+</tr>
+</thead>
+<tbody><tr>
+<td>Static hosting free and unlimited</td>
+<td>Cloudflare Pages: static asset requests are free on both plans</td>
+</tr>
+<tr>
+<td>100,000 requests a day free</td>
+<td>Cloudflare Workers free plan, 10ms CPU per invocation</td>
+</tr>
+<tr>
+<td>1,000,000 function requests a month, perpetually free</td>
+<td>AWS Lambda always free tier, plus 400,000 GB-seconds</td>
+</tr>
+<tr>
+<td>100 GB transfer, 1M invocations, non commercial only</td>
+<td>Vercel Hobby plan and its fair use guidelines</td>
+</tr>
+<tr>
+<td>$20 per user per month</td>
+<td>Vercel Pro</td>
+</tr>
+<tr>
+<td>0.5 GB free database</td>
+<td>Neon free tier, per project</td>
+</tr>
+<tr>
+<td>$4/mo server</td>
+<td>DigitalOcean Basic Droplet</td>
+</tr>
+<tr>
+<td>About $9.49/mo server</td>
+<td>Hetzner CX22, after the April 2026 price change</td>
+</tr>
+<tr>
+<td>$15/mo managed Postgres</td>
+<td>DigitalOcean Managed Postgres, single node</td>
+</tr>
+<tr>
+<td>About $73/mo Kubernetes control plane</td>
+<td>Amazon EKS at $0.10 per hour, before any worker nodes</td>
+</tr>
+</tbody></table></div>
+<p>Two free tiers this tool deliberately does not recommend: Fly.io and Railway
+both ended theirs, and Render&#39;s survives but sleeps after 15 minutes of
+inactivity.</p>
+<h2>How it works</h2>
+<p>Four layers, kept separate because they change at different speeds.</p>
+<p><strong>Detectors</strong> (<code>src/scan/</code>) are small pure functions over the file tree.
+Each emits typed signals with a confidence score and the evidence behind them.</p>
+<p><strong>Profile</strong> (<code>src/rules/profile.ts</code>) aggregates signals and derives the two answers
+the tool turns on: how heavy the static assets are, and whether the repository
+shows any demand at all.</p>
+<p><strong>Rules</strong> (<code>src/rules/</code> for the engine, <code>rules/*.yaml</code> for the data) map profiles
+to verdicts. Every capacity prior, price point, threshold, and sentence lives in
+the YAML. The engine holds no numbers of its own, and the build copies the data
+next to the engine that reads it.</p>
+<p><strong>Renderers</strong> (<code>src/render/</code>) turn one shared verdict object into terminal
+output, INFRA.md, or JSON. Nothing renderer specific leaks upstream.</p>
+<p><code>src/main.ts</code> is the entry point and does nothing but hand argv to <code>src/cli/</code>.
+Each directory under <code>src/</code> is one concern: <code>scan</code> reads the repository, <code>rules</code>
+decides, <code>render</code> writes, <code>cli</code> handles the terminal.</p>
+<h2>Updating a price</h2>
+<p>Prices move, and free tiers disappear. Correcting one is a change to data, not
+to code. In <code>rules/stages.yaml</code>:</p>
+<pre><code class="language-yaml">  - id: app-with-file-database
+    cost_low: 4
+    cost_high: 9
+    source: &quot;DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04&quot;
+</code></pre>
+<p>Edit the number, update the source and its date, run <code>npm test</code>, open a pull
+request. The prose picks the new value up through its <code>{cost_low}</code> placeholder,
+so a price correction stays a small diff.</p>
+<h2>Roadmap</h2>
+<p>Ordered roughly by how much each one would improve an answer today.</p>
+<p><strong>Coverage gaps in what it recognizes</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Per application verdicts in a monorepo. Several apps are detected and said out loud, but the answer still covers them as one system</li>
+<li><input disabled="" type="checkbox"> Scheduled work as its own shape, since cron fits free tiers that long running work does not</li>
+<li><input disabled="" type="checkbox"> Kotlin, Scala, Swift and C++ services</li>
+<li><input disabled="" type="checkbox"> Managed queue services used in place of a queue library</li>
+</ul>
+<p><strong>Making the verdicts sharper</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> <code>--explain</code>, to print the evidence behind a verdict. Detectors already collect it and nothing surfaces it</li>
+<li><input disabled="" type="checkbox"> Warn when the prices in <code>rules/</code> were last checked more than six months ago</li>
+<li><input disabled="" type="checkbox"> Use the CI signal, which is detected today but no shipped rule reads</li>
+<li><input disabled="" type="checkbox"> A flag for Terraform that provisions managed Kubernetes, which the current Kubernetes flag misses</li>
+<li><input disabled="" type="checkbox"> Free tier eligibility beyond payments: team accounts and organisation ownership also disqualify personal plans</li>
+</ul>
+<p><strong>Correctness work</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Test on Windows. Paths are normalised for it but nothing has run there</li>
+<li><input disabled="" type="checkbox"> Close the gap between the two corpus splits, currently 24 points</li>
+<li><input disabled="" type="checkbox"> Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content</li>
+<li><input disabled="" type="checkbox"> Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it</li>
+</ul>
+<p>Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
+kind, hosting provider integrations, config files, and a plugin system.</p>
+<h2>Known limits</h2>
+<p>It reads code, not traffic. It cannot see your actual usage, your bill, or your
+users, so every number is a prior drawn from the shape of the repository rather
+than a measurement of your system. Treat the headroom figures as orders of
+magnitude.</p>
+<p>It assumes list pricing and ignores the discounts, credits, and free trials most
+providers hand out.</p>
+<p>It has no opinion about correctness, security, or whether your architecture is
+any good. It answers one question: what does this cost to run, and what of that
+cost is unearned.</p>
+<p>It abstains more often than it guesses. A runtime it does not recognise gets
+&quot;we could not tell&quot;, not a number.</p>
+<h2>Contributing</h2>
+<pre><code class="language-bash">npm install
+</code></pre>
+<pre><code class="language-bash">npm test
+</code></pre>
+<p>Six things the test suite enforces mechanically:</p>
+<p>The goldens are the specification. <code>goldens/*.md</code> and their fixtures in
+<code>fixtures/</code> pin every verdict the tool can produce, and the CLI has to reproduce
+each one byte for byte. Changing a verdict means changing a golden in the same
+commit, deliberately.</p>
+<p>Every rule that quotes a dollar figure has to cite a source and the date it was
+read.</p>
+<p>Accuracy may not drop. <code>corpus/thresholds.yaml</code> holds the floor for each split.
+A corpus label is never edited to make a test pass. If the tool disagrees with a
+label, the label stands and the case fails.</p>
+<p>The tool stays offline. No source file may reference a network API, and the
+runtime dependency list is checked against an allowlist. There is exactly one
+runtime dependency, a YAML parser, because the rules are community edited data
+and hand rolling a parser for them would be the worse trade.</p>
+<p>No em dashes or en dashes anywhere in the repository. Run <code>npm run check:dashes</code>
+to check. Use a comma, colon, period, or parentheses instead.</p>
+<p>This package is never published. <code>prepublishOnly</code> refuses unconditionally, there
+is no environment variable that gets past it, <code>private</code> is set, and the README is
+checked for install instructions that would never work. Publishing is the one
+action here that cannot be undone, so it is closed off rather than remembered.</p>
+<h2>License</h2>
+<p>MIT. See <a href="LICENSE">LICENSE</a>.</p>
+
+
+      <footer>
+        <p>
+          MIT. Source at
+          <a href="https://github.com/MithrilBytes/shiftpoint">github.com/MithrilBytes/shiftpoint</a>.
+          This page is generated from README.md, so it cannot drift from it.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

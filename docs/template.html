@@ -1,0 +1,138 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>shiftpoint</title>
+    <meta name="description" content="Reads a repository and says what infrastructure it needs, starting at the free tiers." />
+    <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Cpath d='M9 6v20M23 6v20M9 16h14' stroke='%23a8623c' stroke-width='3' fill='none' stroke-linecap='round'/%3E%3Ccircle cx='23' cy='6' r='4' fill='%23a8623c'/%3E%3C/svg%3E" />
+    <style>
+      :root {
+        color-scheme: light dark;
+        --ink: #1c1917;
+        --dim: #57534e;
+        --paper: #faf9f7;
+        --panel: #f2efeb;
+        --line: #e0dbd4;
+        --mark: #a8623c;
+      }
+      @media (prefers-color-scheme: dark) {
+        :root {
+          --ink: #ede9e4;
+          --dim: #a8a29e;
+          --paper: #16140f;
+          --panel: #201d17;
+          --line: #33302a;
+          --mark: #d08a5c;
+        }
+      }
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        padding: 0 1.25rem 6rem;
+        background: var(--paper);
+        color: var(--ink);
+        font: 16px/1.65 ui-sans-serif, system-ui, -apple-system, "Segoe UI", Helvetica, Arial, sans-serif;
+        -webkit-font-smoothing: antialiased;
+      }
+      .wrap { max-width: 46rem; margin-inline: auto; }
+
+      header.hero {
+        display: flex;
+        align-items: center;
+        gap: 1rem;
+        padding: 4rem 0 1rem;
+        flex-wrap: wrap;
+      }
+      header.hero svg { width: 54px; height: 54px; flex: none; }
+      .name { font-size: 2.1rem; font-weight: 650; letter-spacing: -0.02em; margin: 0; }
+      .version {
+        font: 500 0.8rem/1 ui-monospace, SFMono-Regular, Menlo, monospace;
+        color: var(--mark);
+        border: 1px solid var(--line);
+        border-radius: 999px;
+        padding: 0.35rem 0.6rem;
+        margin-left: auto;
+      }
+      .tagline { color: var(--dim); font-size: 1.15rem; margin: 0 0 2.5rem; max-width: 34rem; }
+
+      h2 {
+        font-size: 1.35rem;
+        letter-spacing: -0.01em;
+        margin: 3rem 0 0.75rem;
+        padding-top: 1.75rem;
+        border-top: 1px solid var(--line);
+      }
+      h3 { font-size: 1.05rem; margin: 2rem 0 0.5rem; }
+      p, li { color: var(--ink); }
+      a { color: var(--mark); text-underline-offset: 2px; }
+
+      pre {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 8px;
+        padding: 1rem 1.1rem;
+        overflow-x: auto;
+        font: 0.85rem/1.55 ui-monospace, SFMono-Regular, Menlo, monospace;
+      }
+      code { font: 0.88em ui-monospace, SFMono-Regular, Menlo, monospace; }
+      p code, li code, td code {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 4px;
+        padding: 0.1em 0.35em;
+      }
+      pre code { background: none; border: 0; padding: 0; }
+
+      .scroll { overflow-x: auto; }
+      table { border-collapse: collapse; width: 100%; font-size: 0.92rem; margin: 1rem 0; }
+      th, td { text-align: left; padding: 0.5rem 0.7rem; border-bottom: 1px solid var(--line); vertical-align: top; }
+      th { color: var(--dim); font-weight: 600; white-space: nowrap; }
+
+      blockquote { margin: 1rem 0; padding-left: 1rem; border-left: 3px solid var(--line); color: var(--dim); }
+      hr { border: 0; border-top: 1px solid var(--line); margin: 2.5rem 0; }
+      ul { padding-left: 1.15rem; }
+      li { margin: 0.3rem 0; }
+      li input[type="checkbox"] { margin-right: 0.4rem; }
+
+      footer {
+        margin-top: 4rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid var(--line);
+        color: var(--dim);
+        font-size: 0.88rem;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="wrap">
+      <header class="hero">
+        <!-- A shift gate. The dot is the point you shift at. -->
+        <svg viewBox="0 0 32 32" role="img" aria-label="shiftpoint">
+          <path
+            d="M9 6v20M23 6v20M9 16h14"
+            stroke="var(--mark)"
+            stroke-width="3"
+            fill="none"
+            stroke-linecap="round"
+          />
+          <circle cx="23" cy="6" r="4.5" fill="var(--mark)" />
+        </svg>
+        <h1 class="name">shiftpoint</h1>
+        <span class="version">{{version}}</span>
+      </header>
+
+      <p class="tagline">{{tagline}}</p>
+
+      {{content}}
+
+      <footer>
+        <p>
+          MIT. Source at
+          <a href="https://github.com/MithrilBytes/shiftpoint">github.com/MithrilBytes/shiftpoint</a>.
+          This page is generated from README.md, so it cannot drift from it.
+        </p>
+      </footer>
+    </div>
+  </body>
+</html>

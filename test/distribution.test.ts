@@ -52,3 +52,20 @@ describe("this package is not published", () => {
     expect(readme).not.toMatch(/npm\s+install\s+(-g|--global)\s+shiftpoint/);
   });
 });
+
+describe("the docs page cannot drift from the README", () => {
+  // docs/index.html is generated. If somebody edits README.md and forgets to
+  // run the build, the site keeps making a claim the project no longer makes.
+  it("is up to date with README.md", () => {
+    const committed = readFileSync(join(REPO_ROOT, "docs", "index.html"), "utf8");
+    execFileSync("npm", ["run", "docs"], { cwd: REPO_ROOT, stdio: "pipe" });
+    const rebuilt = readFileSync(join(REPO_ROOT, "docs", "index.html"), "utf8");
+    expect(rebuilt, "run: npm run docs").toBe(committed);
+  });
+
+  it("states the accuracy the corpus actually measures", () => {
+    const page = readFileSync(join(REPO_ROOT, "docs", "index.html"), "utf8");
+    expect(page).toContain("Holdout");
+    expect(page).toMatch(/7\d\.\d%/);
+  });
+});
