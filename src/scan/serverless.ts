@@ -227,10 +227,6 @@ export const MODEL_RUNTIME = new Set([
   "whisperx",
   "spacy",
   "ultralytics",
-  "scikit-learn",
-  "sklearn",
-  "xgboost",
-  "lightgbm",
 ]);
 
 /**
@@ -239,8 +235,19 @@ export const MODEL_RUNTIME = new Set([
  * Heavy, but sized by ordinary things: a headless browser, a video encoder, a
  * numerical library. Any of them runs on a small always on server, so the price
  * is knowable and the ordinary stage rules give it.
+ *
+ * The classical machine learning libraries belong here rather than above. What
+ * a fitted scikit-learn or gradient boosting model loads is a table of
+ * coefficients or a few hundred trees: it runs on a CPU, and the smallest
+ * servers hold it. They rule out a free function tier on size alone, which is
+ * a statement about the machine and not about a model nobody can see, so the
+ * ordinary rules can and should put a price on them.
  */
 export const HEAVY_RUNTIME = new Set([
+  "scikit-learn",
+  "sklearn",
+  "xgboost",
+  "lightgbm",
   "opencv-python",
   "opencv-python-headless",
   "scipy",

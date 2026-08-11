@@ -30,6 +30,27 @@ const JVM_BUILD = /(^|\/)(pom\.xml|build\.gradle(\.kts)?)$/;
 const DOTNET_PROJECT = /(^|\/)[^/]+\.(csproj|fsproj|vbproj)$/;
 const DENO_MANIFEST = /(^|\/)deno\.jsonc?$/;
 
+// Files that say where to download somebody else's software and how to install
+// it: a Homebrew formula, a cask. They are written in Ruby and they are not a
+// program. Nothing they describe is in the repository, and nothing in them ever
+// runs anywhere but on the machine of the person installing it.
+const RUBY_SOURCE = /\.rb$/;
+const FORMULA = /^\s*class\s+\w+\s*<\s*(Formula|Cask)\b/m;
+const CASK = /^\s*cask\s+["'][^"']+["']\s+do\b/m;
+
+/**
+ * Source files that are package descriptions rather than code this repository
+ * runs. A tap or a bucket is an index: the shape detector must not read one as
+ * a pile of scripts, and the language detector must not report a runtime for
+ * software that lives somewhere else.
+ */
+export function packageIndexFiles(repo: Repo): string[] {
+  return repo.matching(RUBY_SOURCE).filter((file) => {
+    const text = repo.read(file) ?? "";
+    return FORMULA.test(text) || CASK.test(text);
+  });
+}
+
 /** Every dependency manifest in the repository, whatever the language. */
 export function manifestFiles(repo: Repo): string[] {
   return repo.files.filter(

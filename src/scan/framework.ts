@@ -14,6 +14,7 @@ import {
   mixFiles,
   nodeDependencies,
   otherLanguageSources,
+  packageIndexFiles,
   packageJsonFiles,
   pythonDependencies,
   pythonManifestFiles,
@@ -363,9 +364,11 @@ const SOURCE_LANGUAGES: Array<{ pattern: RegExp; value: string }> = [
 function languageFromSources(repo: Repo): Signal {
   const found: string[] = [];
   const evidence: string[] = [];
+  // A package description is not a program in the language it is written in.
+  const index = new Set(packageIndexFiles(repo));
 
   for (const { pattern, value } of SOURCE_LANGUAGES) {
-    const files = repo.matching(pattern);
+    const files = repo.matching(pattern).filter((file) => !index.has(file));
     if (files.length > 0) {
       found.push(value);
       evidence.push(`${files.length} ${value} source file(s), including ${files[0]}`);

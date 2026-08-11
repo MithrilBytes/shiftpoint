@@ -1,6 +1,7 @@
 import type { Repo } from "./repo.js";
 import type { Signal } from "../types.js";
 import { detectContainer } from "./container.js";
+import { DOCKERFILE } from "./container.js";
 import { detectFramework } from "./framework.js";
 import { detectJobs } from "./jobs.js";
 import { detectOrchestration } from "./orchestration.js";
@@ -21,6 +22,7 @@ import {
   goModFiles,
   manifestFiles,
   nodeManifests,
+  packageIndexFiles,
   pythonManifestFiles,
 } from "./manifest.js";
 
@@ -36,6 +38,17 @@ const SCRIPT_SOURCE = /\.(py|js|mjs|cjs|ts|rb|go)$/;
 // Repositories whose deliverable is the packaging rather than an application.
 const GO_SOURCE = /\.go$/;
 const GO_MAIN_PACKAGE = /^\s*package\s+main\s*$/m;
+const PYTHON_SOURCE = /\.py$/;
+// Where a program starts. A module carrying a main guard was written to be run
+// rather than imported, which is the plainest statement a repository makes
+// about itself when no framework names it.
+const PROGRAM_ENTRY_POINT = /^\s*if\s+__name__\s*==\s*["']__main__["']\s*:/m;
+const WORKFLOW = /^\.github\/workflows\/[^/]+\.ya?ml$/;
+// A workflow that fires on a clock and runs commands of its own. Both halves
+// matter: a schedule without a run block is calling somebody else's action, and
+// a run block without a schedule is continuous integration for code elsewhere.
+const WORKFLOW_SCHEDULE = /^\s*schedule\s*:/m;
+const WORKFLOW_RUN = /^\s*-?\s*run\s*:/m;
 const TERRAFORM_FILE = /\.tf(\.json)?$/;
 const CHART_FILE = /(^|\/)Chart\.ya?ml$/;
 
@@ -79,7 +92,10 @@ export function detectShape(repo: Repo): Signal[] {
   }
 
   const notebooks = repo.matching(NOTEBOOK);
-  const scripts = repo.matching(SCRIPT_SOURCE);
+  // A formula or a cask is a package description, not source this repository
+  // runs, so it cannot make the repository a pile of scripts.
+  const index = new Set(packageIndexFiles(repo));
+  const scripts = repo.matching(SCRIPT_SOURCE).filter((file) => !index.has(file));
 
   // Notebooks are checked before packaging: a repository can carry a
   // pyproject.toml and still be an analysis, not something you deploy.
@@ -214,6 +230,38 @@ export function detectShape(repo: Repo): Signal[] {
     return [signal("cli", "high", program)];
   }
 
+  // Data that outnumbers the code makes the data the deliverable and the code a
+  // helper that keeps it honest. An open dataset with one standard library
+  // validator CI runs on every pull request is not a thing anybody hosts, and
+  // calling it a script quoted a free function tier for a file that is never
+  // called from outside the repository.
+  //
+  // Strictly outnumbers, on purpose. One fixture next to one script is a script
+  // with a fixture, and this should say nothing about it.
+  //
+  // Asked before the manifest below, because whether the data is the point does
+  // not depend on whether somebody wrote down a dependency.
+  const data = repo.matching(DATA_FILE);
+  if (scripts.length > 0 && data.length > scripts.length) {
+    return [
+      signal(
+        "unknown",
+        "low",
+        `${data.length} data file(s) against ${scripts.length} source file(s), so the deliverable here looks like the data rather than the code`,
+      ),
+    ];
+  }
+
+  // Code that says where it starts is a program. No framework named this
+  // repository, but a module written to be run is not an open question: it is
+  // something somebody runs, and the only thing left to settle is whether it
+  // needs a process of its own, which the serverless detector answers on the
+  // same evidence.
+  const entry = programEntryPoint(repo);
+  if (entry !== undefined) {
+    return [signal("script", "medium", entry)];
+  }
+
   // A project that declares dependencies has been set up to run as something,
   // and if none of them is a framework this tool knows, the honest answer is
   // that it could not tell. Calling it a script instead would route it to the
@@ -231,30 +279,21 @@ export function detectShape(repo: Repo): Signal[] {
   }
 
   // No declared dependencies at all, so loose source files really are loose.
-  //
-  // Unless the data outnumbers them, in which case the data is the deliverable
-  // and the code is a helper that keeps it honest. An open dataset with one
-  // standard library validator CI runs on every pull request is not a thing
-  // anybody hosts, and calling it a script quoted a free function tier for a
-  // file that is never called from outside the repository.
-  //
-  // Strictly outnumbers, on purpose. One fixture next to one script is a script
-  // with a fixture, and this should say nothing about it.
-  const data = repo.matching(DATA_FILE);
-  if (scripts.length > 0 && data.length > scripts.length) {
-    return [
-      signal(
-        "unknown",
-        "low",
-        `${data.length} data file(s) against ${scripts.length} source file(s), so the deliverable here looks like the data rather than the code`,
-      ),
-    ];
-  }
-
   if (scripts.length > 0) {
     return [
       signal("script", "medium", `${scripts.length} source file(s), no manifest, and no web framework`),
     ];
+  }
+
+  // Nothing in the tree is a program, so the last place one can be is the
+  // automation. A workflow that runs on a clock and carries its own commands is
+  // the program: git scraping repositories are built this way, and the run
+  // block finishes in seconds and leaves nothing behind. Checked here, below
+  // every source file, because a repository with code in it is described by the
+  // code and not by what CI does to it.
+  const scheduledInCi = scheduledWorkflow(repo);
+  if (scheduledInCi !== undefined) {
+    return [signal("script", "medium", scheduledInCi)];
   }
 
   // Documents and nothing else. No manifest, no source, no generator: a
@@ -295,10 +334,49 @@ function webProcess(repo: Repo): string | undefined {
   return undefined;
 }
 
+/** The first module written to be run rather than imported. */
+function programEntryPoint(repo: Repo): string | undefined {
+  for (const file of repo.matching(PYTHON_SOURCE)) {
+    if (PROGRAM_ENTRY_POINT.test(repo.read(file) ?? "")) {
+      return `${file} declares a program entry point, and no framework serves requests`;
+    }
+  }
+  return undefined;
+}
+
+/** A workflow that fires on a schedule and runs commands of its own. */
+function scheduledWorkflow(repo: Repo): string | undefined {
+  // Unless the repository builds something. A Dockerfile is a description of an
+  // artefact this repository produces, and a workflow that rebuilds it weekly
+  // is publishing that artefact rather than being the program itself.
+  if (repo.matching(DOCKERFILE).length > 0) return undefined;
+
+  for (const file of repo.matching(WORKFLOW)) {
+    const text = repo.read(file) ?? "";
+    if (WORKFLOW_SCHEDULE.test(text) && WORKFLOW_RUN.test(text)) {
+      return `${file} runs on a schedule, and its own steps are the only program here`;
+    }
+  }
+  return undefined;
+}
+
+/**
+ * A package that offers other code an import surface. "main" is not on this
+ * list: npm init writes one into every package.json it creates, so it states
+ * nothing. These three are written down on purpose.
+ */
+const IMPORT_SURFACE = ["exports", "types", "typings"];
+
 /** A bin entry or a console script is a thing you install, not a thing you host. */
 function commandLineEntry(repo: Repo): string | undefined {
   for (const [file, manifest] of nodeManifests(repo)) {
-    if (manifest["bin"] !== undefined) return `${file} declares a bin entry`;
+    if (manifest["bin"] === undefined) continue;
+    // A package that declares an import surface as well as a command is a
+    // library that ships a command with it. The command is a convenience; the
+    // reason anybody adds the package to their dependencies is the API, and
+    // the library rule below says so in the right words.
+    if (IMPORT_SURFACE.some((key) => manifest[key] !== undefined)) continue;
+    return `${file} declares a bin entry`;
   }
   for (const file of pythonManifestFiles(repo)) {
     const text = repo.read(file) ?? "";
