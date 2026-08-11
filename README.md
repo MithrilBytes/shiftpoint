@@ -28,15 +28,15 @@ attention with nothing in the code to justify it.
 
 | Detector | Reads | Answers |
 | --- | --- | --- |
-| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, and source file extensions | Next.js, Nuxt, Astro, SvelteKit, Remix, Nest, Express, Fastify, Koa, Hono, Flask, Django, FastAPI, Rails, Sinatra, chi, Gin, Echo, Fiber, static, or unknown |
+| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, `Cargo.toml`, `composer.json`, `mix.exs`, `pom.xml`, `build.gradle`, `deno.json`, `*.csproj`, and source file extensions | Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 38 web frameworks across them |
 | Shape | Notebooks, bin entries, console scripts, published entry points, source layout | Is this a service, a notebook, a library, a command line tool, a script, or a static site |
-| Serverless fit | Queue libraries, socket libraries, machine learning runtimes, local file databases | Can this run on a free function tier, and if not, exactly what stops it |
-| Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL` | Postgres, MySQL, SQLite, Mongo, or none |
+| Serverless fit | Queue libraries, socket and gateway clients, in process schedulers, machine learning runtimes, local file databases, runtimes no free tier offers | Can this run on a free function tier, and if not, which of eight reasons stops it |
+| Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL`, Laravel, Ecto and Spring configuration, Entity Framework | Postgres, MySQL, SQLite, Mongo, D1, or none |
 | Commercial | Payment processors, business tooling, pricing and checkout routes | Whether the free plans are licensed for what you are doing |
 | Applications | Manifests that declare a web framework, per directory | How many separately deployable apps live here |
 | Container | `Dockerfile`, `docker-compose.yml` | How it is packaged, and how many services it is really made of |
 | Orchestration | Kubernetes manifests by shape, Helm charts, Terraform | What deployment machinery is checked in |
-| Background jobs | Sidekiq, Resque, Celery, RQ, Dramatiq, BullMQ, and others | Whether work happens outside the request cycle |
+| Background jobs | Sidekiq, Resque, Celery, RQ, Dramatiq, BullMQ, asynq, and others | Whether work happens outside the request cycle |
 | Static assets | Images, video, audio, fonts, documents | How much weight is checked in |
 | CI | GitHub Actions, GitLab CI, CircleCI, Jenkins | Which CI service, if any |
 
@@ -237,11 +237,10 @@ Ordered roughly by how much each one would improve an answer today.
 
 **Coverage gaps in what it recognizes**
 
-- [ ] More frameworks: FastAPI, Astro, SvelteKit, Remix, Go and Rust web servers
-- [ ] Bun and Deno as runtimes, including their own deploy targets
-- [ ] Edge databases: Turso, Cloudflare D1, Supabase, PlanetScale
+- [ ] Per application verdicts in a monorepo. Several apps are detected and said out loud, but the answer still covers them as one system
 - [ ] Scheduled work as its own shape, since cron fits free tiers that long running work does not
-- [ ] Per application verdicts in a monorepo. Several apps are now detected and said out loud, but the answer still covers them as one system
+- [ ] Kotlin, Scala, Swift and C++ services
+- [ ] Managed queue services used in place of a queue library
 
 **Making the verdicts sharper**
 
@@ -254,11 +253,30 @@ Ordered roughly by how much each one would improve an answer today.
 **Correctness work**
 
 - [ ] Test on Windows. Paths are normalised for it but nothing has run there
+- [ ] Close the gap between the two corpus splits, currently 24 points
 - [ ] Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content
 - [ ] Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it
 
 Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
 kind, hosting provider integrations, config files, and a plugin system.
+
+## How accurate it is
+
+Measured against 226 hand labelled repositories in `corpus/`. Cases are split
+into tune and holdout by hashing the case id, so nobody picks which side a case
+falls on.
+
+| Split | Stage | Flags | Cases |
+| --- | --- | --- | --- |
+| Tune, which the tool is iterated against | 96.3% | 96.3% | 162 |
+| Holdout, which it is not | 71.9% | 95.3% | 64 |
+
+Holdout is the number that describes a repository nobody has looked at. Roughly
+five verdicts in seven name the right tier, and about 19 in 20 get the flags
+right.
+
+The 24 point gap between the splits is the figure to watch. It is what fitting
+to the tune cases looks like, and it should close rather than widen.
 
 ## Known limits
 
@@ -274,6 +292,9 @@ It has no opinion about correctness, security, or whether your architecture is
 any good. It answers one question: what does this cost to run, and what of that
 cost is unearned.
 
+It abstains more often than it guesses. A runtime it does not recognise gets
+"we could not tell", not a number.
+
 ## Contributing
 
 ```bash
@@ -284,7 +305,7 @@ npm install
 npm test
 ```
 
-Five things the test suite enforces mechanically:
+Six things the test suite enforces mechanically:
 
 The goldens are the specification. `goldens/*.md` and their fixtures in
 `fixtures/` pin every verdict the tool can produce, and the CLI has to reproduce
@@ -293,6 +314,10 @@ commit, deliberately.
 
 Every rule that quotes a dollar figure has to cite a source and the date it was
 read.
+
+Accuracy may not drop. `corpus/thresholds.yaml` holds the floor for each split.
+A corpus label is never edited to make a test pass. If the tool disagrees with a
+label, the label stands and the case fails.
 
 The tool stays offline. No source file may reference a network API, and the
 runtime dependency list is checked against an allowlist. There is exactly one
