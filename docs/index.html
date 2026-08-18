@@ -143,7 +143,7 @@ attention with nothing in the code to justify it.</p>
 <tr>
 <td>Language and framework</td>
 <td><code>package.json</code>, <code>requirements.txt</code>, <code>pyproject.toml</code>, <code>Pipfile</code>, <code>setup.py</code>, <code>Gemfile</code>, <code>go.mod</code>, <code>Cargo.toml</code>, <code>composer.json</code>, <code>mix.exs</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>deno.json</code>, <code>*.csproj</code>, and source file extensions</td>
-<td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 38 web frameworks across them</td>
+<td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 39 web frameworks across them</td>
 </tr>
 <tr>
 <td>Shape</td>
@@ -448,17 +448,27 @@ so a price correction stays a small diff.</p>
 <p><strong>Making the verdicts sharper</strong></p>
 <ul>
 <li><input disabled="" type="checkbox"> <code>--explain</code>, to print the evidence behind a verdict. Detectors already collect it and nothing surfaces it</li>
-<li><input disabled="" type="checkbox"> Warn when the prices in <code>rules/</code> were last checked more than six months ago</li>
 <li><input disabled="" type="checkbox"> Use the CI signal, which is detected today but no shipped rule reads</li>
 <li><input disabled="" type="checkbox"> A flag for Terraform that provisions managed Kubernetes, which the current Kubernetes flag misses</li>
 <li><input disabled="" type="checkbox"> Free tier eligibility beyond payments: team accounts and organisation ownership also disqualify personal plans</li>
 </ul>
+<p><strong>Keeping the prices honest</strong></p>
+<ul>
+<li><input checked="" disabled="" type="checkbox"> Fail the build when a price has gone unchecked for six months</li>
+<li><input disabled="" type="checkbox"> A weekly job that fetches each provider's pricing page and opens a pull request when a figure moves. It has to report three outcomes, not two: unchanged, changed, and not found. A page redesign breaks the matcher, and treating that as unchanged lets a price rot behind a green build</li>
+<li><input disabled="" type="checkbox"> Nine of the eleven prices this tool quotes have no machine readable source anywhere. Cloud pricing APIs cover AWS, Azure and GCP; nobody publishes free tier boundaries as data</li>
+</ul>
 <p><strong>Correctness work</strong></p>
 <ul>
-<li><input disabled="" type="checkbox"> Test on Windows. Paths are normalised for it but nothing has run there</li>
+<li><input checked="" disabled="" type="checkbox"> Test on Windows</li>
 <li><input disabled="" type="checkbox"> Close the gap between the two corpus splits, currently 24 points</li>
 <li><input disabled="" type="checkbox"> Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content</li>
 <li><input disabled="" type="checkbox"> Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it</li>
+</ul>
+<p><strong>Distribution</strong></p>
+<ul>
+<li><input disabled="" type="checkbox"> Homebrew tap, scoop manifest and prebuilt binaries on the release page</li>
+<li><input disabled="" type="checkbox"> Reproducible release builds with the version stamped through ldflags</li>
 </ul>
 <p>Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
 kind, hosting provider integrations, config files, and a plugin system.</p>
@@ -479,7 +489,7 @@ cost is unearned.</p>
 </code></pre>
 <p>That runs the unit tests, the nine goldens byte for byte, the 226 corpus cases,
 and the repository wide checks.</p>
-<p>Six things the test suite enforces mechanically:</p>
+<p>Seven things the test suite enforces mechanically:</p>
 <p>The goldens are the specification. <code>goldens/*.md</code> and their fixtures in
 <code>fixtures/</code> pin every verdict the tool can produce, and the CLI has to reproduce
 each one byte for byte. Changing a verdict means changing a golden in the same
@@ -489,6 +499,8 @@ read.</p>
 <p>Accuracy may not drop. <code>corpus/thresholds.yaml</code> holds the floor for each split.
 A corpus label is never edited to make a test pass. If the tool disagrees with a
 label, the label stands and the case fails.</p>
+<p>Prices go stale. A source older than six months fails the build, so somebody has
+to go and look rather than notice.</p>
 <p>The tool stays offline. It makes no network calls at run time, ever. The one
 dependency the binary carries is a YAML parser, because the rules are community
 edited data and hand rolling a parser for them would be the worse trade.</p>

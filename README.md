@@ -28,7 +28,7 @@ attention with nothing in the code to justify it.
 
 | Detector | Reads | Answers |
 | --- | --- | --- |
-| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, `Cargo.toml`, `composer.json`, `mix.exs`, `pom.xml`, `build.gradle`, `deno.json`, `*.csproj`, and source file extensions | Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 38 web frameworks across them |
+| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, `Cargo.toml`, `composer.json`, `mix.exs`, `pom.xml`, `build.gradle`, `deno.json`, `*.csproj`, and source file extensions | Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 39 web frameworks across them |
 | Shape | Notebooks, bin entries, console scripts, published entry points, source layout | Is this a service, a notebook, a library, a command line tool, a script, or a static site |
 | Serverless fit | Queue libraries, socket and gateway clients, in process schedulers, machine learning runtimes, local file databases, runtimes no free tier offers | Can this run on a free function tier, and if not, which of eight reasons stops it |
 | Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL`, Laravel, Ecto and Spring configuration, Entity Framework | Postgres, MySQL, SQLite, Mongo, D1, or none |
@@ -254,17 +254,27 @@ Ordered roughly by how much each one would improve an answer today.
 **Making the verdicts sharper**
 
 - [ ] `--explain`, to print the evidence behind a verdict. Detectors already collect it and nothing surfaces it
-- [ ] Warn when the prices in `rules/` were last checked more than six months ago
 - [ ] Use the CI signal, which is detected today but no shipped rule reads
 - [ ] A flag for Terraform that provisions managed Kubernetes, which the current Kubernetes flag misses
 - [ ] Free tier eligibility beyond payments: team accounts and organisation ownership also disqualify personal plans
 
+**Keeping the prices honest**
+
+- [x] Fail the build when a price has gone unchecked for six months
+- [ ] A weekly job that fetches each provider's pricing page and opens a pull request when a figure moves. It has to report three outcomes, not two: unchanged, changed, and not found. A page redesign breaks the matcher, and treating that as unchanged lets a price rot behind a green build
+- [ ] Nine of the eleven prices this tool quotes have no machine readable source anywhere. Cloud pricing APIs cover AWS, Azure and GCP; nobody publishes free tier boundaries as data
+
 **Correctness work**
 
-- [ ] Test on Windows. Paths are normalised for it but nothing has run there
+- [x] Test on Windows
 - [ ] Close the gap between the two corpus splits, currently 24 points
 - [ ] Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content
 - [ ] Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it
+
+**Distribution**
+
+- [ ] Homebrew tap, scoop manifest and prebuilt binaries on the release page
+- [ ] Reproducible release builds with the version stamped through ldflags
 
 Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
 kind, hosting provider integrations, config files, and a plugin system.
@@ -295,7 +305,7 @@ go test ./...
 That runs the unit tests, the nine goldens byte for byte, the 226 corpus cases,
 and the repository wide checks.
 
-Six things the test suite enforces mechanically:
+Seven things the test suite enforces mechanically:
 
 The goldens are the specification. `goldens/*.md` and their fixtures in
 `fixtures/` pin every verdict the tool can produce, and the CLI has to reproduce
@@ -308,6 +318,9 @@ read.
 Accuracy may not drop. `corpus/thresholds.yaml` holds the floor for each split.
 A corpus label is never edited to make a test pass. If the tool disagrees with a
 label, the label stands and the case fails.
+
+Prices go stale. A source older than six months fails the build, so somebody has
+to go and look rather than notice.
 
 The tool stays offline. It makes no network calls at run time, ever. The one
 dependency the binary carries is a YAML parser, because the rules are community
