@@ -548,7 +548,11 @@ var ArgumentParsers = map[string]bool{
 
 var (
 	// The same thing said with the standard library instead of a dependency.
-	standardArgumentParsing = regexp.MustCompile(`\bflag\.(Parse|Args?|String|Int|Int64|Bool|Float64|Duration|Var)\(|\benv::args\b|\bArgumentParser\(|\bgetopts?\b`)
+	// os.Args and sys.argv are the plainest way a program reads its command line,
+	// and a tool that hand rolls its parsing uses nothing else. Leaving them out
+	// missed every command line program that did not reach for a library, which
+	// includes this one.
+	standardArgumentParsing = regexp.MustCompile(`\bflag\.(Parse|Args?|String|Int|Int64|Bool|Float64|Duration|Var)\(|\bos\.Args\b|\bsys\.argv\b|\benv::args\b|\bArgumentParser\(|\bgetopts?\b`)
 
 	// A call that opens a listening socket.
 	//
