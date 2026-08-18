@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -147,6 +148,12 @@ func TestRunWritesTheSameFileEveryTime(t *testing.T) {
 }
 
 func TestRunReportsAPathItCannotWrite(t *testing.T) {
+	// Chmod on Windows toggles a read only attribute on files and does not
+	// stop a directory accepting new ones, so there is no read only directory
+	// to fail against.
+	if runtime.GOOS == "windows" {
+		t.Skip("a directory cannot be made read only this way")
+	}
 	root := fixture(t, "static-site")
 	if err := os.Chmod(root, 0o555); err != nil {
 		t.Skipf("cannot make a read only directory: %v", err)

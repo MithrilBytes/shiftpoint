@@ -4,6 +4,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"runtime"
 	"strings"
 	"testing"
 )
@@ -113,6 +114,13 @@ func TestBinaryExitsNonZeroOnAMissingPath(t *testing.T) {
 func TestBinaryStaysQuietWhenItsOutputIsClosedEarly(t *testing.T) {
 	// Piping into head closes stdout. A stack trace in front of somebody who
 	// wanted the first few lines is not an answer.
+	//
+	// A closed pipe is POSIX behaviour and this reaches for a POSIX shell to
+	// provoke it. Windows reports the same situation differently and has no sh
+	// to run, so the case does not exist there to be tested.
+	if runtime.GOOS == "windows" {
+		t.Skip("no POSIX shell, and a closed pipe reports differently")
+	}
 	tool, root := binary(t), repoRoot(t)
 	command := exec.Command("sh", "-c", tool+" "+filepath.Join(root, "fixtures", "k8s-overkill")+" | head -2")
 	out, err := command.CombinedOutput()
