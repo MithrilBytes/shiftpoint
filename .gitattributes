@@ -1,0 +1,13 @@
+# The goldens and the corpus are compared byte for byte, so the bytes have to be
+# the same on every machine. Without this, Git for Windows rewrites text files to
+# CRLF on checkout and every golden comparison fails there and nowhere else.
+* text=auto eol=lf
+
+*.png binary
+*.jpg binary
+*.gif binary
+*.webp binary
+*.ico binary
+*.pdf binary
+*.woff binary
+*.woff2 binary

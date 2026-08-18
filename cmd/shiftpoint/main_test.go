@@ -14,7 +14,11 @@ import (
 
 func binary(t *testing.T) string {
 	t.Helper()
-	path := filepath.Join(t.TempDir(), "shiftpoint")
+	name := "shiftpoint"
+	if runtime.GOOS == "windows" {
+		name += ".exe"
+	}
+	path := filepath.Join(t.TempDir(), name)
 	build := exec.Command("go", "build", "-o", path, ".")
 	if out, err := build.CombinedOutput(); err != nil {
 		t.Fatalf("build failed: %v\n%s", err, out)
@@ -77,9 +81,11 @@ func TestBinaryCarriesItsOwnRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
+	// Running from a directory with no checkout above it is the whole point.
+	// The environment is left alone: trimming it to PATH drops SystemRoot,
+	// which Windows needs to start a process at all.
 	command := exec.Command(tool, elsewhere)
 	command.Dir = elsewhere
-	command.Env = []string{"PATH=" + os.Getenv("PATH")}
 
 	out, err := command.CombinedOutput()
 	if err != nil {
