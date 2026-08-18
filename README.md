@@ -12,7 +12,7 @@ ends, not which server to rent.
 Answers come in dollars and plain sentences. No CPU numbers, no percentiles, no
 dashboards.
 
-It reads files. It makes no network calls, ever.
+One binary, no runtime. It reads files and makes no network calls, ever.
 
 ## What it provides
 
@@ -118,33 +118,24 @@ to the tune cases looks like, and it should close rather than widen.
 
 ## Install
 
-Requires Node 20 or newer.
+Requires Go 1.24 or newer to build. The result is a single binary with no
+runtime to install.
 
-shiftpoint is not on the npm registry and is not going there. It is distributed
-by clone, and the build refuses to publish.
+```bash
+go install github.com/MithrilBytes/shiftpoint/cmd/shiftpoint@latest
+```
+
+Or from a clone:
 
 ```bash
 git clone https://github.com/MithrilBytes/shiftpoint.git
 ```
 
 ```bash
-cd shiftpoint && npm install && npm run build
+cd shiftpoint && go build -o shiftpoint ./cmd/shiftpoint
 ```
 
-That gives you a working `dist/main.js`:
-
-```bash
-node dist/main.js /path/to/your/repo
-```
-
-To get a `shiftpoint` command on your PATH without a registry:
-
-```bash
-npm link
-```
-
-Every example below assumes you ran that. Without it, read `shiftpoint` as
-`node dist/main.js`.
+The rules ship inside the binary, so it works anywhere you copy it.
 
 ## Usage
 
@@ -214,24 +205,24 @@ inactivity.
 
 Four layers, kept separate because they change at different speeds.
 
-**Detectors** (`src/scan/`) are small pure functions over the file tree.
+**Detectors** (`internal/scan/`) are small pure functions over the file tree.
 Each emits typed signals with a confidence score and the evidence behind them.
 
-**Profile** (`src/rules/profile.ts`) aggregates signals and derives the two answers
+**Profile** (`rules/profile.go`) aggregates signals and derives the two answers
 the tool turns on: how heavy the static assets are, and whether the repository
 shows any demand at all.
 
-**Rules** (`src/rules/` for the engine, `rules/*.yaml` for the data) map profiles
-to verdicts. Every capacity prior, price point, threshold, and sentence lives in
-the YAML. The engine holds no numbers of its own, and the build copies the data
-next to the engine that reads it.
+**Rules** (`rules/`) map profiles to verdicts. The engine and the YAML sit in
+the same directory, so a contributor correcting a price finds `stages.yaml`
+beside the code that reads it. Every capacity prior, price point, threshold and
+sentence lives in that data. The engine holds no numbers of its own.
 
-**Renderers** (`src/render/`) turn one shared verdict object into terminal
+**Renderers** (`internal/render/`) turn one shared verdict object into terminal
 output, INFRA.md, or JSON. Nothing renderer specific leaks upstream.
 
-`src/main.ts` is the entry point and does nothing but hand argv to `src/cli/`.
-Each directory under `src/` is one concern: `scan` reads the repository, `rules`
-decides, `render` writes, `cli` handles the terminal.
+`cmd/shiftpoint` is the entry point and does nothing but hand argv to
+`internal/cli`. The rules YAML is embedded with `go:embed`, so the binary
+cannot ship without its data.
 
 ## Updating a price
 
@@ -245,8 +236,8 @@ to code. In `rules/stages.yaml`:
     source: "DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04"
 ```
 
-Edit the number, update the source and its date, run `npm test`, open a pull
-request. The prose picks the new value up through its `{cost_low}` placeholder,
+Edit the number, update the source and its date, run `go test ./...`, open a
+pull request. The prose picks the new value up through its `{cost_low}` placeholder,
 so a price correction stays a small diff.
 
 ## Roadmap
@@ -298,12 +289,11 @@ It abstains more often than it guesses. A runtime it does not recognise gets
 ## Contributing
 
 ```bash
-npm install
+go test ./...
 ```
 
-```bash
-npm test
-```
+That runs the unit tests, the nine goldens byte for byte, the 226 corpus cases,
+and the repository wide checks.
 
 Six things the test suite enforces mechanically:
 
@@ -319,18 +309,15 @@ Accuracy may not drop. `corpus/thresholds.yaml` holds the floor for each split.
 A corpus label is never edited to make a test pass. If the tool disagrees with a
 label, the label stands and the case fails.
 
-The tool stays offline. No source file may reference a network API, and the
-runtime dependency list is checked against an allowlist. There is exactly one
-runtime dependency, a YAML parser, because the rules are community edited data
-and hand rolling a parser for them would be the worse trade.
+The tool stays offline. It makes no network calls at run time, ever. The one
+dependency the binary carries is a YAML parser, because the rules are community
+edited data and hand rolling a parser for them would be the worse trade.
 
-No em dashes or en dashes anywhere in the repository. Run `npm run check:dashes`
-to check. Use a comma, colon, period, or parentheses instead.
+No em dashes or en dashes anywhere in the repository. `go test ./tools/checks`
+checks it. Use a comma, colon, period, or parentheses instead.
 
-This package is never published. `prepublishOnly` refuses unconditionally, there
-is no environment variable that gets past it, `private` is set, and the README is
-checked for install instructions that would never work. Publishing is the one
-action here that cannot be undone, so it is closed off rather than remembered.
+The rules ship inside the binary. `go:embed` puts the YAML in the executable at
+build time, so a build cannot lose its data on the way to another machine.
 
 ## License
 

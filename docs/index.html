@@ -314,21 +314,16 @@ right.</p>
 <p>The 24 point gap between the splits is the figure to watch. It is what fitting
 to the tune cases looks like, and it should close rather than widen.</p>
 <h2>Install</h2>
-<p>Requires Node 20 or newer.</p>
-<p>shiftpoint is not on the npm registry and is not going there. It is distributed
-by clone, and the build refuses to publish.</p>
+<p>Requires Go 1.24 or newer to build. The result is a single binary with no
+runtime to install.</p>
+<pre><code class="language-bash">go install github.com/MithrilBytes/shiftpoint/cmd/shiftpoint@latest
+</code></pre>
+<p>Or from a clone:</p>
 <pre><code class="language-bash">git clone https://github.com/MithrilBytes/shiftpoint.git
 </code></pre>
-<pre><code class="language-bash">cd shiftpoint &amp;&amp; npm install &amp;&amp; npm run build
+<pre><code class="language-bash">cd shiftpoint &amp;&amp; go build -o shiftpoint ./cmd/shiftpoint
 </code></pre>
-<p>That gives you a working <code>dist/main.js</code>:</p>
-<pre><code class="language-bash">node dist/main.js /path/to/your/repo
-</code></pre>
-<p>To get a <code>shiftpoint</code> command on your PATH without a registry:</p>
-<pre><code class="language-bash">npm link
-</code></pre>
-<p>Every example below assumes you ran that. Without it, read <code>shiftpoint</code> as
-<code>node dist/main.js</code>.</p>
+<p>The rules ship inside the binary, so it works anywhere you copy it.</p>
 <h2>Usage</h2>
 <pre><code class="language-bash">shiftpoint
 </code></pre>
@@ -416,20 +411,20 @@ both ended theirs, and Render's survives but sleeps after 15 minutes of
 inactivity.</p>
 <h2>How it works</h2>
 <p>Four layers, kept separate because they change at different speeds.</p>
-<p><strong>Detectors</strong> (<code>src/scan/</code>) are small pure functions over the file tree.
+<p><strong>Detectors</strong> (<code>internal/scan/</code>) are small pure functions over the file tree.
 Each emits typed signals with a confidence score and the evidence behind them.</p>
-<p><strong>Profile</strong> (<code>src/rules/profile.ts</code>) aggregates signals and derives the two answers
+<p><strong>Profile</strong> (<code>rules/profile.go</code>) aggregates signals and derives the two answers
 the tool turns on: how heavy the static assets are, and whether the repository
 shows any demand at all.</p>
-<p><strong>Rules</strong> (<code>src/rules/</code> for the engine, <code>rules/*.yaml</code> for the data) map profiles
-to verdicts. Every capacity prior, price point, threshold, and sentence lives in
-the YAML. The engine holds no numbers of its own, and the build copies the data
-next to the engine that reads it.</p>
-<p><strong>Renderers</strong> (<code>src/render/</code>) turn one shared verdict object into terminal
+<p><strong>Rules</strong> (<code>rules/</code>) map profiles to verdicts. The engine and the YAML sit in
+the same directory, so a contributor correcting a price finds <code>stages.yaml</code>
+beside the code that reads it. Every capacity prior, price point, threshold and
+sentence lives in that data. The engine holds no numbers of its own.</p>
+<p><strong>Renderers</strong> (<code>internal/render/</code>) turn one shared verdict object into terminal
 output, INFRA.md, or JSON. Nothing renderer specific leaks upstream.</p>
-<p><code>src/main.ts</code> is the entry point and does nothing but hand argv to <code>src/cli/</code>.
-Each directory under <code>src/</code> is one concern: <code>scan</code> reads the repository, <code>rules</code>
-decides, <code>render</code> writes, <code>cli</code> handles the terminal.</p>
+<p><code>cmd/shiftpoint</code> is the entry point and does nothing but hand argv to
+<code>internal/cli</code>. The rules YAML is embedded with <code>go:embed</code>, so the binary
+cannot ship without its data.</p>
 <h2>Updating a price</h2>
 <p>Prices move, and free tiers disappear. Correcting one is a change to data, not
 to code. In <code>rules/stages.yaml</code>:</p>
@@ -438,8 +433,8 @@ to code. In <code>rules/stages.yaml</code>:</p>
     cost_high: 9
     source: &quot;DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04&quot;
 </code></pre>
-<p>Edit the number, update the source and its date, run <code>npm test</code>, open a pull
-request. The prose picks the new value up through its <code>{cost_low}</code> placeholder,
+<p>Edit the number, update the source and its date, run <code>go test ./...</code>, open a
+pull request. The prose picks the new value up through its <code>{cost_low}</code> placeholder,
 so a price correction stays a small diff.</p>
 <h2>Roadmap</h2>
 <p>Ordered roughly by how much each one would improve an answer today.</p>
@@ -480,10 +475,10 @@ cost is unearned.</p>
 <p>It abstains more often than it guesses. A runtime it does not recognise gets
 &quot;we could not tell&quot;, not a number.</p>
 <h2>Contributing</h2>
-<pre><code class="language-bash">npm install
+<pre><code class="language-bash">go test ./...
 </code></pre>
-<pre><code class="language-bash">npm test
-</code></pre>
+<p>That runs the unit tests, the nine goldens byte for byte, the 226 corpus cases,
+and the repository wide checks.</p>
 <p>Six things the test suite enforces mechanically:</p>
 <p>The goldens are the specification. <code>goldens/*.md</code> and their fixtures in
 <code>fixtures/</code> pin every verdict the tool can produce, and the CLI has to reproduce
@@ -494,16 +489,13 @@ read.</p>
 <p>Accuracy may not drop. <code>corpus/thresholds.yaml</code> holds the floor for each split.
 A corpus label is never edited to make a test pass. If the tool disagrees with a
 label, the label stands and the case fails.</p>
-<p>The tool stays offline. No source file may reference a network API, and the
-runtime dependency list is checked against an allowlist. There is exactly one
-runtime dependency, a YAML parser, because the rules are community edited data
-and hand rolling a parser for them would be the worse trade.</p>
-<p>No em dashes or en dashes anywhere in the repository. Run <code>npm run check:dashes</code>
-to check. Use a comma, colon, period, or parentheses instead.</p>
-<p>This package is never published. <code>prepublishOnly</code> refuses unconditionally, there
-is no environment variable that gets past it, <code>private</code> is set, and the README is
-checked for install instructions that would never work. Publishing is the one
-action here that cannot be undone, so it is closed off rather than remembered.</p>
+<p>The tool stays offline. It makes no network calls at run time, ever. The one
+dependency the binary carries is a YAML parser, because the rules are community
+edited data and hand rolling a parser for them would be the worse trade.</p>
+<p>No em dashes or en dashes anywhere in the repository. <code>go test ./tools/checks</code>
+checks it. Use a comma, colon, period, or parentheses instead.</p>
+<p>The rules ship inside the binary. <code>go:embed</code> puts the YAML in the executable at
+build time, so a build cannot lose its data on the way to another machine.</p>
 <h2>License</h2>
 <p>MIT. See <a href="LICENSE">LICENSE</a>.</p>
 
