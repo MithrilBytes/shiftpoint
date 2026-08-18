@@ -139,7 +139,8 @@ attention with nothing in the code to justify it.</p>
 <th>Answers</th>
 </tr>
 </thead>
-<tbody><tr>
+<tbody>
+<tr>
 <td>Language and framework</td>
 <td><code>package.json</code>, <code>requirements.txt</code>, <code>pyproject.toml</code>, <code>Pipfile</code>, <code>setup.py</code>, <code>Gemfile</code>, <code>go.mod</code>, <code>Cargo.toml</code>, <code>composer.json</code>, <code>mix.exs</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>deno.json</code>, <code>*.csproj</code>, and source file extensions</td>
 <td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 38 web frameworks across them</td>
@@ -194,7 +195,8 @@ attention with nothing in the code to justify it.</p>
 <td>GitHub Actions, GitLab CI, CircleCI, Jenkins</td>
 <td>Which CI service, if any</td>
 </tr>
-</tbody></table></div>
+</tbody>
+</table></div>
 <p>Every signal carries a confidence level and the evidence behind it. A detector
 never guesses. When it finds nothing it says so, and it lowers its confidence
 when there was nothing to read in the first place.</p>
@@ -208,7 +210,8 @@ when there was nothing to read in the first place.</p>
 <th>The verdict is</th>
 </tr>
 </thead>
-<tbody><tr>
+<tbody>
+<tr>
 <td>A notebook, a library, or a command line tool</td>
 <td>There is nothing to host here</td>
 </tr>
@@ -252,7 +255,8 @@ when there was nothing to read in the first place.</p>
 <td>Something it cannot identify</td>
 <td>Said plainly, with no price attached</td>
 </tr>
-</tbody></table></div>
+</tbody>
+</table></div>
 <p>The downward detection sits on top of that: Kubernetes manifests or a Helm
 chart with no demand behind them, or a compose file describing a stack you rent
 servers for when a free tier would host the same thing.</p>
@@ -289,7 +293,8 @@ falls on.</p>
 <th>Cases</th>
 </tr>
 </thead>
-<tbody><tr>
+<tbody>
+<tr>
 <td>Tune, which the tool is iterated against</td>
 <td>96.3%</td>
 <td>96.3%</td>
@@ -301,7 +306,8 @@ falls on.</p>
 <td>95.3%</td>
 <td>64</td>
 </tr>
-</tbody></table></div>
+</tbody>
+</table></div>
 <p>Holdout is the number that describes a repository nobody has looked at. Roughly
 five verdicts in seven name the right tier, and about 19 in 20 get the flags
 right.</p>
@@ -328,7 +334,7 @@ by clone, and the build refuses to publish.</p>
 </code></pre>
 <pre><code>Stage:    A free managed tier covers this (est. $0/mo)
 Headroom: Cloudflare Workers allows 100,000 requests a day free, and
-          Vercel&#39;s free plan allows 100 GB of traffic a month, either
+          Vercel's free plan allows 100 GB of traffic a month, either
           of which is a long way off for a new app
 Tripwire: Those free plans are licensed for personal, non commercial
           use, so the day this becomes a business it is about $20/mo
@@ -362,7 +368,8 @@ suite fails the build if a rule quotes money without citing one.</p>
 <th>Source</th>
 </tr>
 </thead>
-<tbody><tr>
+<tbody>
+<tr>
 <td>Static hosting free and unlimited</td>
 <td>Cloudflare Pages: static asset requests are free on both plans</td>
 </tr>
@@ -402,9 +409,10 @@ suite fails the build if a rule quotes money without citing one.</p>
 <td>About $73/mo Kubernetes control plane</td>
 <td>Amazon EKS at $0.10 per hour, before any worker nodes</td>
 </tr>
-</tbody></table></div>
+</tbody>
+</table></div>
 <p>Two free tiers this tool deliberately does not recommend: Fly.io and Railway
-both ended theirs, and Render&#39;s survives but sleeps after 15 minutes of
+both ended theirs, and Render's survives but sleeps after 15 minutes of
 inactivity.</p>
 <h2>How it works</h2>
 <p>Four layers, kept separate because they change at different speeds.</p>
