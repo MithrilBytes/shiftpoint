@@ -56,7 +56,7 @@ Tune misses print when the suite runs, because tune is what you iterate
 against. Holdout misses stay quiet unless you ask:
 
 ```bash
-SHIFTPOINT_SHOW_HOLDOUT=1 npx vitest run test/corpus.test.ts
+SHIFTPOINT_SHOW_HOLDOUT=1 go test ./corpus -v
 ```
 
 Look at holdout misses when you want to know how you are doing. Do not fix them
