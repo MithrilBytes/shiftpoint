@@ -250,10 +250,10 @@ var HeavyRuntime = map[string]bool{
 //
 // The free plans this tool prices against, Cloudflare Workers and Vercel's
 // Hobby plan, run JavaScript and Python. None of them takes a PHP application,
-// a JVM service, or a BEAM release, so "a free tier covers this" is not an
-// answer available to these at any traffic level. What they need is a process
-// on a machine of their own, which is the next rung down and a price this tool
-// can give.
+// a JVM service, a BEAM release or a .NET service, so "a free tier covers this"
+// is not an answer available to these at any traffic level. What they need is a
+// process on a machine of their own, which is the next rung down and a price
+// this tool can give.
 //
 // This is about where the code can run, not about the language.
 var NoFreeTierRuntime = map[string]bool{
@@ -261,7 +261,6 @@ var NoFreeTierRuntime = map[string]bool{
 	"java":   true,
 	"elixir": true,
 	"dotnet": true,
-	"perl":   true,
 }
 
 // RuntimeMatching returns the production dependencies that fall in one of the

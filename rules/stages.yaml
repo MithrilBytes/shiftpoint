@@ -220,7 +220,7 @@ stages:
 
   - id: known-language-only
     when:
-      language: [node, python, ruby, go, rust, php, elixir, java, dotnet, deno, perl, sql]
+      language: [node, python, ruby, go, rust, php, elixir, java, dotnet, deno, sql]
     confidence: low
     # An abstention. The tool understood nothing here, so it is in no position
     # to affirm that nothing needs changing.
