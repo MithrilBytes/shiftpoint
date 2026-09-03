@@ -4,6 +4,8 @@ import (
 	"regexp"
 	"strings"
 	"testing"
+
+	"github.com/MithrilBytes/shiftpoint/internal/scan"
 )
 
 func load(t *testing.T) *RuleSet {
@@ -46,6 +48,53 @@ func TestEveryStageIsReachable(t *testing.T) {
 			t.Errorf("stage %q is unreachable, shadowed by %s", stage.ID, name)
 		}
 	}
+}
+
+func TestEveryLanguageARuleMatchesCanBeDetected(t *testing.T) {
+	// TestEveryStageIsReachable proves a rule can be selected, but it builds the
+	// profile from the first value of each field, so a language further down the
+	// list is never tried. A name no detector emits is a branch nothing reaches.
+	//
+	// Adding the detector is one way to satisfy this. Deleting the orphaned name
+	// is the other, and for a language nothing in the corpus exercises it is
+	// usually the right one.
+	emitted := map[string]bool{}
+	for _, entry := range scan.LanguageManifests {
+		emitted[entry.Language] = true
+	}
+	for _, entry := range scan.SourceLanguages {
+		emitted[entry.Language] = true
+	}
+
+	set := load(t)
+	field := string(scan.FieldLanguage)
+	checked := 0
+	for id, when := range everyCondition(set) {
+		for _, language := range when[field] {
+			checked++
+			if !emitted[language] {
+				t.Errorf("rule %q matches language %q, which no detector emits", id, language)
+			}
+		}
+	}
+	if checked == 0 {
+		t.Errorf("no rule matched on %q, so this test checked nothing", field)
+	}
+}
+
+// everyCondition returns the when block of every rule in the set, by id.
+func everyCondition(set *RuleSet) map[string]map[string][]string {
+	all := map[string]map[string][]string{}
+	for _, stage := range set.Stages {
+		all[stage.ID] = stage.When
+	}
+	for _, flag := range set.Flags {
+		all[flag.ID] = flag.When
+	}
+	for _, caveat := range set.Caveats {
+		all[caveat.ID] = caveat.When
+	}
+	return all
 }
 
 func TestEveryRuleHasAUniqueID(t *testing.T) {

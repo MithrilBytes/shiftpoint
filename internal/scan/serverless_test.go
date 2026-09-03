@@ -331,3 +331,20 @@ func TestRuntimeSetsStayDistinct(t *testing.T) {
 		}
 	}
 }
+
+func TestNoFreeTierRuntimeOnlyNamesLanguagesADetectorEmits(t *testing.T) {
+	// The set is read against the values of the language signal, so a key that
+	// no detector produces silently never blocks anything.
+	emitted := map[string]bool{}
+	for _, entry := range LanguageManifests {
+		emitted[entry.Language] = true
+	}
+	for _, entry := range SourceLanguages {
+		emitted[entry.Language] = true
+	}
+	for language := range NoFreeTierRuntime {
+		if !emitted[language] {
+			t.Errorf("NoFreeTierRuntime holds %q, which no detector emits", language)
+		}
+	}
+}
