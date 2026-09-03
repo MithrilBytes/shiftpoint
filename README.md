@@ -13,7 +13,7 @@ makes no network calls.
 
 | Detector | Reads | Answers |
 | --- | --- | --- |
-| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, `Cargo.toml`, `composer.json`, `mix.exs`, `pom.xml`, `build.gradle`, `deno.json`, `*.csproj`, and source file extensions | Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, 38 web frameworks and seven static site generators |
+| Language and framework | `package.json`, `requirements.txt`, `pyproject.toml`, `Pipfile`, `setup.py`, `Gemfile`, `go.mod`, `Cargo.toml`, `composer.json`, `mix.exs`, `pom.xml`, `build.gradle`, `deno.json`, `*.csproj`, and source file extensions | Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, SQL, 38 web frameworks and eight static site generators |
 | Shape | Notebooks, bin entries, console scripts, published entry points, source layout | Is this a service, a notebook, a library, a command line tool, a script, or a static site |
 | Serverless fit | Queue libraries, socket and gateway clients, in process schedulers, machine learning runtimes, local file databases, runtimes no free tier offers | Can this run on a free function tier, and if not, which of ten reasons stops it |
 | Database | Prisma schemas, Drizzle configs, dependency manifests, compose images, `DATABASE_URL`, Laravel, Ecto and Spring configuration, Entity Framework | Postgres, MySQL, SQLite, Mongo, D1, or none |
@@ -91,10 +91,10 @@ id.
 
 | Split | Stage | Flags | Cases |
 | --- | --- | --- | --- |
-| Tune, which the tool is iterated against | 96.3% | 96.3% | 162 |
+| Tune, which the tool is iterated against | 96.9% | 96.3% | 162 |
 | Holdout, which it is not | 71.9% | 95.3% | 64 |
 
-Stage accuracy is 24 points lower on holdout than on tune.
+Stage accuracy is 25 points lower on holdout than on tune.
 
 ## Install
 
@@ -241,7 +241,7 @@ placeholder.
 **Correctness work**
 
 - [x] Test on Windows
-- [ ] Close the gap between the two corpus splits, currently 24 points
+- [ ] Close the gap between the two corpus splits, currently 25 points
 - [ ] Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content
 - [ ] Resolve commercial intent rather than inferring it. A business that invoices outside the product ships no payment code, so today the verdict states the licensing condition rather than resolving it
 

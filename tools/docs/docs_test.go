@@ -38,7 +38,7 @@ func TestPageStatesTheAccuracyTheCorpusMeasures(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	for _, want := range []string{"Holdout", "71.9%", "96.3%"} {
+	for _, want := range []string{"Holdout", "96.9%", "71.9%", "96.3%"} {
 		if !strings.Contains(page, want) {
 			t.Errorf("the page does not mention %s", want)
 		}

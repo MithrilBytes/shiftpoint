@@ -13,8 +13,11 @@
 # a process that runs forever without a web framework. Holdout went from 57.8%
 # to 71.9%, so most of that generalised.
 #
-# The 24 point gap between the two splits is the number to watch. It is what
+# The 25 point gap between the two splits is the number to watch. It is what
 # fitting to the tune cases looks like, and it should close, not widen.
+#
+# 2026-09-03: tune moved to 96.9% when SQL became a language the tool can read,
+# which fixed one tune case and no holdout case, so the gap widened by a point.
 tune:
   stage: 0.94
   flags: 0.94

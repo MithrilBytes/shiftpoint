@@ -288,6 +288,15 @@ var SourceLanguages = []SourceLanguage{
 	{Language: "ruby", Pattern: regexp.MustCompile(`\.rb$`)},
 	{Language: "go", Pattern: regexp.MustCompile(`\.go$`)},
 	{Language: "rust", Pattern: regexp.MustCompile(`\.rs$`)},
+	// A warehouse project carries no manifest any of the readers above
+	// understand: dbt states itself in dbt_project.yml and its models are SQL.
+	// Without this the tool called those "we could not tell what this
+	// repository runs".
+	//
+	// There is deliberately no perl entry beside it. Perl reaches a verdict
+	// through ServerExecutedSource, which reads what a web server is configured
+	// to run, and a loose .pl file is a script somebody runs by hand.
+	{Language: "sql", Pattern: regexp.MustCompile(`\.sql$`)},
 }
 
 // DetectFramework reports the language and the framework. Both come from
