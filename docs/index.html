@@ -124,13 +124,7 @@
 
       <p class="tagline">Point shiftpoint at a repository and it tells you what infrastructure that repository actually needs: whether a free tier covers it, what would push you off that free tier, and what you are already paying for that nothing in the code asks for.</p>
 
-      <h2>What it provides</h2>
-<h3>The question it answers</h3>
-<p>What can I run inside a free tier before I have to start paying for cloud, and
-what specifically would push me over that line.</p>
-<p>Alongside that, the reverse: what is in this repository that costs money or
-attention with nothing in the code to justify it.</p>
-<h3>What it reads</h3>
+      <h2>What it reads</h2>
 <div class="scroll"><table>
 <thead>
 <tr>
@@ -143,7 +137,7 @@ attention with nothing in the code to justify it.</p>
 <tr>
 <td>Language and framework</td>
 <td><code>package.json</code>, <code>requirements.txt</code>, <code>pyproject.toml</code>, <code>Pipfile</code>, <code>setup.py</code>, <code>Gemfile</code>, <code>go.mod</code>, <code>Cargo.toml</code>, <code>composer.json</code>, <code>mix.exs</code>, <code>pom.xml</code>, <code>build.gradle</code>, <code>deno.json</code>, <code>*.csproj</code>, and source file extensions</td>
-<td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, Perl, and 39 web frameworks across them</td>
+<td>Node, Python, Ruby, Go, Rust, PHP, Elixir, Java, .NET, Deno, 38 web frameworks and seven static site generators</td>
 </tr>
 <tr>
 <td>Shape</td>
@@ -153,7 +147,7 @@ attention with nothing in the code to justify it.</p>
 <tr>
 <td>Serverless fit</td>
 <td>Queue libraries, socket and gateway clients, in process schedulers, machine learning runtimes, local file databases, runtimes no free tier offers</td>
-<td>Can this run on a free function tier, and if not, which of eight reasons stops it</td>
+<td>Can this run on a free function tier, and if not, which of ten reasons stops it</td>
 </tr>
 <tr>
 <td>Database</td>
@@ -198,11 +192,11 @@ attention with nothing in the code to justify it.</p>
 </tbody>
 </table></div>
 <p>Every signal carries a confidence level and the evidence behind it. A detector
-never guesses. When it finds nothing it says so, and it lowers its confidence
-when there was nothing to read in the first place.</p>
-<h3>What it can tell you</h3>
-<p>Sixteen verdicts, matched most specific first. Everything below comes from
-<code>rules/*.yaml</code>, so this table is data, not code.</p>
+that finds nothing reports that, at lower confidence when there were no files
+to read.</p>
+<h2>What it can tell you</h2>
+<p>Sixteen verdicts, matched most specific first, all of them from <code>rules/*.yaml</code>.
+The ones you are most likely to meet:</p>
 <div class="scroll"><table>
 <thead>
 <tr>
@@ -217,7 +211,7 @@ when there was nothing to read in the first place.</p>
 </tr>
 <tr>
 <td>Sized by a machine learning model it loads</td>
-<td>Deliberately not priced, because the cheapest servers cannot load it at all</td>
+<td>Not priced, because the cheapest servers cannot load it at all</td>
 </tr>
 <tr>
 <td>A static site</td>
@@ -253,37 +247,37 @@ when there was nothing to read in the first place.</p>
 </tr>
 <tr>
 <td>Something it cannot identify</td>
-<td>Said plainly, with no price attached</td>
+<td>No price attached</td>
 </tr>
 </tbody>
 </table></div>
-<p>The downward detection sits on top of that: Kubernetes manifests or a Helm
-chart with no demand behind them, or a compose file describing a stack you rent
-servers for when a free tier would host the same thing.</p>
-<p>Demand comes only from what the application does, never from what the
-deployment configuration asks for. A replica count of 50 is an intention, not
-traffic, which is what lets the tool tell you a Kubernetes setup is unearned.</p>
-<h3>The verdict format</h3>
+<p>Flags are matched separately, against spending with no demand behind it:
+Kubernetes manifests or a Helm chart with nothing in the code to justify them,
+or a compose file describing a stack you rent servers for when a free tier
+would host the same thing.</p>
+<p>Demand comes from what the application does, not from what the deployment
+configuration declares. A replica count of 50 does not change the verdict.</p>
+<h2>The verdict format</h2>
 <p>Every verdict has the same four fields, in the same order, whether you read it
 in the terminal, in INFRA.md, or as JSON.</p>
-<p><strong>Stage.</strong> What you need right now, with a price, or an explicit refusal to
-price it.</p>
+<p><strong>Stage.</strong> What you need right now, with a price, or a statement that it cannot
+be priced.</p>
 <p><strong>Headroom.</strong> Roughly how far that carries you.</p>
 <p><strong>Tripwire.</strong> The specific thing that means it is time to look again, and what
 the next step costs.</p>
 <p><strong>Flags.</strong> Spending and complexity the repository shows no demand for.</p>
-<p>Under those four is a confidence level. When confidence is low, it says so
-plainly rather than inventing a number. The same line carries caveats: things
+<p>Under those four is a confidence level. A low one is stated plainly, and the
+headroom line says when the number behind it is a guess. The same line carries
+caveats: things
 that make the answer fit less well, such as a repository holding several
 deployable applications when a verdict describes one system.</p>
-<p>When there is nothing worth changing, the verdict ends with the whole point of
-the tool:</p>
+<p>When there is nothing worth changing, the verdict ends with:</p>
 <pre><code>Do nothing today.
 </code></pre>
-<h2>How accurate it is</h2>
-<p>Measured against 226 hand labelled repositories in <code>corpus/</code>. Cases are split
-into tune and holdout by hashing the case id, so nobody picks which side a case
-falls on.</p>
+<h2>Accuracy</h2>
+<p>Measured against 226 hand labelled cases in <code>corpus/</code>, each a small specimen of
+a repository shape. Cases are split into tune and holdout by hashing the case
+id.</p>
 <div class="scroll"><table>
 <thead>
 <tr>
@@ -308,11 +302,7 @@ falls on.</p>
 </tr>
 </tbody>
 </table></div>
-<p>Holdout is the number that describes a repository nobody has looked at. Roughly
-five verdicts in seven name the right tier, and about 19 in 20 get the flags
-right.</p>
-<p>The 24 point gap between the splits is the figure to watch. It is what fitting
-to the tune cases looks like, and it should close rather than widen.</p>
+<p>Stage accuracy is 24 points lower on holdout than on tune.</p>
 <h2>Install</h2>
 <p>Requires Go 1.24 or newer to build. The result is a single binary with no
 runtime to install.</p>
@@ -323,7 +313,7 @@ runtime to install.</p>
 </code></pre>
 <pre><code class="language-bash">cd shiftpoint &amp;&amp; go build -o shiftpoint ./cmd/shiftpoint
 </code></pre>
-<p>The rules ship inside the binary, so it works anywhere you copy it.</p>
+<p>The rules ship inside the binary.</p>
 <h2>Usage</h2>
 <pre><code class="language-bash">shiftpoint
 </code></pre>
@@ -353,8 +343,8 @@ does not contain.
 </code></pre>
 <h2>Where the numbers come from</h2>
 <p>Every rule that quotes a dollar figure carries the source it came from and the
-date that source was read. A price without a source is a guess, and the test
-suite fails the build if a rule quotes money without citing one.</p>
+date that source was read. The test suite fails the build if a rule quotes
+money without citing one.</p>
 <p>Current figures were read on 2026-08-04:</p>
 <div class="scroll"><table>
 <thead>
@@ -366,11 +356,11 @@ suite fails the build if a rule quotes money without citing one.</p>
 <tbody>
 <tr>
 <td>Static hosting free and unlimited</td>
-<td>Cloudflare Pages: static asset requests are free on both plans</td>
+<td>Cloudflare Pages: static asset requests are free and unlimited</td>
 </tr>
 <tr>
 <td>100,000 requests a day free</td>
-<td>Cloudflare Workers free plan, 10ms CPU per invocation</td>
+<td>Cloudflare Workers free plan</td>
 </tr>
 <tr>
 <td>1,000,000 function requests a month, perpetually free</td>
@@ -378,7 +368,7 @@ suite fails the build if a rule quotes money without citing one.</p>
 </tr>
 <tr>
 <td>100 GB transfer, 1M invocations, non commercial only</td>
-<td>Vercel Hobby plan and its fair use guidelines</td>
+<td>Vercel Hobby plan</td>
 </tr>
 <tr>
 <td>$20 per user per month</td>
@@ -390,15 +380,15 @@ suite fails the build if a rule quotes money without citing one.</p>
 </tr>
 <tr>
 <td>$4/mo server</td>
-<td>DigitalOcean Basic Droplet</td>
+<td>DigitalOcean Droplet</td>
 </tr>
 <tr>
 <td>About $9.49/mo server</td>
-<td>Hetzner CX22, after the April 2026 price change</td>
+<td>Hetzner CX22</td>
 </tr>
 <tr>
 <td>$15/mo managed Postgres</td>
-<td>DigitalOcean Managed Postgres, single node</td>
+<td>DigitalOcean Managed Postgres</td>
 </tr>
 <tr>
 <td>About $73/mo Kubernetes control plane</td>
@@ -406,48 +396,43 @@ suite fails the build if a rule quotes money without citing one.</p>
 </tr>
 </tbody>
 </table></div>
-<p>Two free tiers this tool deliberately does not recommend: Fly.io and Railway
-both ended theirs, and Render's survives but sleeps after 15 minutes of
+<p>Three providers this tool does not route to: Fly.io and Railway both ended
+their free tiers, and Render's survives but sleeps after 15 minutes of
 inactivity.</p>
 <h2>How it works</h2>
-<p>Four layers, kept separate because they change at different speeds.</p>
-<p><strong>Detectors</strong> (<code>internal/scan/</code>) are small pure functions over the file tree.
-Each emits typed signals with a confidence score and the evidence behind them.</p>
-<p><strong>Profile</strong> (<code>rules/profile.go</code>) aggregates signals and derives the two answers
-the tool turns on: how heavy the static assets are, and whether the repository
+<p>Four layers, in the order a run goes through them.</p>
+<p><strong>Detectors</strong> (<code>internal/scan/</code>) are pure functions over the file tree. Each
+emits typed signals with a confidence level and the evidence behind them.</p>
+<p><strong>Profile</strong> (<code>rules/profile.go</code>) aggregates signals into the fields the rules
+match on, including how heavy the static assets are and whether the repository
 shows any demand at all.</p>
-<p><strong>Rules</strong> (<code>rules/</code>) map profiles to verdicts. The engine and the YAML sit in
-the same directory, so a contributor correcting a price finds <code>stages.yaml</code>
-beside the code that reads it. Every capacity prior, price point, threshold and
-sentence lives in that data. The engine holds no numbers of its own.</p>
-<p><strong>Renderers</strong> (<code>internal/render/</code>) turn one shared verdict object into terminal
-output, INFRA.md, or JSON. Nothing renderer specific leaks upstream.</p>
-<p><code>cmd/shiftpoint</code> is the entry point and does nothing but hand argv to
-<code>internal/cli</code>. The rules YAML is embedded with <code>go:embed</code>, so the binary
-cannot ship without its data.</p>
+<p><strong>Rules</strong> (<code>rules/</code>) map profiles to verdicts. Capacity priors, price points,
+thresholds and verdict sentences are in <code>rules/*.yaml</code>.</p>
+<p><strong>Renderers</strong> (<code>internal/render/</code>) turn the verdict into terminal output,
+INFRA.md, or JSON.</p>
+<p><code>cmd/shiftpoint</code> is the entry point and hands argv to <code>internal/cli</code>. The rules
+YAML is embedded with <code>go:embed</code>.</p>
 <h2>Updating a price</h2>
-<p>Prices move, and free tiers disappear. Correcting one is a change to data, not
-to code. In <code>rules/stages.yaml</code>:</p>
+<p>In <code>rules/stages.yaml</code>:</p>
 <pre><code class="language-yaml">  - id: app-with-file-database
     cost_low: 4
     cost_high: 9
     source: &quot;DigitalOcean Droplet $4/mo, Hetzner CX22 about $9.49/mo, read 2026-08-04&quot;
 </code></pre>
 <p>Edit the number, update the source and its date, run <code>go test ./...</code>, open a
-pull request. The prose picks the new value up through its <code>{cost_low}</code> placeholder,
-so a price correction stays a small diff.</p>
+pull request. The prose picks the new value up through its <code>{cost_low}</code>
+placeholder.</p>
 <h2>Roadmap</h2>
-<p>Ordered roughly by how much each one would improve an answer today.</p>
-<p><strong>Coverage gaps in what it recognizes</strong></p>
+<p><strong>Coverage gaps in what it recognises</strong></p>
 <ul>
-<li><input disabled="" type="checkbox"> Per application verdicts in a monorepo. Several apps are detected and said out loud, but the answer still covers them as one system</li>
-<li><input disabled="" type="checkbox"> Scheduled work as its own shape, since cron fits free tiers that long running work does not</li>
+<li><input disabled="" type="checkbox"> Per application verdicts in a monorepo. Several apps are detected today, but the answer covers them as one system</li>
+<li><input disabled="" type="checkbox"> Scheduled work as its own shape. Cron jobs are eligible for free function tiers that a long running process cannot use</li>
 <li><input disabled="" type="checkbox"> Kotlin, Scala, Swift and C++ services</li>
 <li><input disabled="" type="checkbox"> Managed queue services used in place of a queue library</li>
 </ul>
 <p><strong>Making the verdicts sharper</strong></p>
 <ul>
-<li><input disabled="" type="checkbox"> <code>--explain</code>, to print the evidence behind a verdict. Detectors already collect it and nothing surfaces it</li>
+<li><input disabled="" type="checkbox"> <code>--explain</code>, to print the evidence behind a verdict. Detectors collect it and nothing surfaces it</li>
 <li><input disabled="" type="checkbox"> Use the CI signal, which is detected today but no shipped rule reads</li>
 <li><input disabled="" type="checkbox"> A flag for Terraform that provisions managed Kubernetes, which the current Kubernetes flag misses</li>
 <li><input disabled="" type="checkbox"> Free tier eligibility beyond payments: team accounts and organisation ownership also disqualify personal plans</li>
@@ -455,59 +440,51 @@ so a price correction stays a small diff.</p>
 <p><strong>Keeping the prices honest</strong></p>
 <ul>
 <li><input checked="" disabled="" type="checkbox"> Fail the build when a price has gone unchecked for six months</li>
-<li><input disabled="" type="checkbox"> A weekly job that fetches each provider's pricing page and opens a pull request when a figure moves. It has to report three outcomes, not two: unchanged, changed, and not found. A page redesign breaks the matcher, and treating that as unchanged lets a price rot behind a green build</li>
-<li><input disabled="" type="checkbox"> Nine of the eleven prices this tool quotes have no machine readable source anywhere. Cloud pricing APIs cover AWS, Azure and GCP; nobody publishes free tier boundaries as data</li>
+<li><input disabled="" type="checkbox"> A weekly job that checks each provider's pricing page and opens a pull request when a figure moves. It has to report not found separately from unchanged, or a page redesign leaves a stale price behind a passing build</li>
+<li><input disabled="" type="checkbox"> A machine readable source for the prices. Nine of the ten in the table above have none: cloud pricing APIs cover paid AWS, Azure and GCP rates, and nobody publishes free tier boundaries as data at all</li>
 </ul>
 <p><strong>Correctness work</strong></p>
 <ul>
 <li><input checked="" disabled="" type="checkbox"> Test on Windows</li>
 <li><input disabled="" type="checkbox"> Close the gap between the two corpus splits, currently 24 points</li>
 <li><input disabled="" type="checkbox"> Large checked in datasets still dominate the file scan. Nested checkouts and virtual environments are skipped, but a directory of ten thousand data files is read as repository content</li>
-<li><input disabled="" type="checkbox"> Commercial intent is inferred, never known. A business that invoices outside the product ships no payment code, so the verdict states the licensing condition rather than resolving it</li>
+<li><input disabled="" type="checkbox"> Resolve commercial intent rather than inferring it. A business that invoices outside the product ships no payment code, so today the verdict states the licensing condition rather than resolving it</li>
 </ul>
 <p><strong>Distribution</strong></p>
 <ul>
 <li><input disabled="" type="checkbox"> Homebrew tap, scoop manifest and prebuilt binaries on the release page</li>
-<li><input disabled="" type="checkbox"> Reproducible release builds with the version stamped through ldflags</li>
+<li><input disabled="" type="checkbox"> Reproducible release builds. The version already stamps through ldflags, but nothing produces the release binaries</li>
 </ul>
-<p>Deliberately out of scope: a GitHub Action, an MCP server, telemetry of any
-kind, hosting provider integrations, config files, and a plugin system.</p>
+<p>Out of scope: a GitHub Action, an MCP server, telemetry of any kind, hosting
+provider integrations, config files, and a plugin system.</p>
 <h2>Known limits</h2>
-<p>It reads code, not traffic. It cannot see your actual usage, your bill, or your
+<p>shiftpoint reads source code. It cannot see your usage, your bill or your
 users, so every number is a prior drawn from the shape of the repository rather
 than a measurement of your system. Treat the headroom figures as orders of
 magnitude.</p>
-<p>It assumes list pricing and ignores the discounts, credits, and free trials most
+<p>It assumes list pricing and ignores the discounts, credits and free trials most
 providers hand out.</p>
-<p>It has no opinion about correctness, security, or whether your architecture is
-any good. It answers one question: what does this cost to run, and what of that
-cost is unearned.</p>
-<p>It abstains more often than it guesses. A runtime it does not recognise gets
-&quot;we could not tell&quot;, not a number.</p>
+<p>It does not check correctness, security or architecture.</p>
+<p>A runtime it does not recognise gets &quot;we could not tell&quot; rather than a number.</p>
 <h2>Contributing</h2>
 <pre><code class="language-bash">go test ./...
 </code></pre>
 <p>That runs the unit tests, the nine goldens byte for byte, the 226 corpus cases,
 and the repository wide checks.</p>
-<p>Seven things the test suite enforces mechanically:</p>
-<p>The goldens are the specification. <code>goldens/*.md</code> and their fixtures in
-<code>fixtures/</code> pin every verdict the tool can produce, and the CLI has to reproduce
-each one byte for byte. Changing a verdict means changing a golden in the same
-commit, deliberately.</p>
+<p>Six things the build enforces:</p>
+<p><code>goldens/*.md</code> and their fixtures in <code>fixtures/</code> pin eight of the sixteen
+verdicts, and the CLI has to reproduce each one byte for byte. Changing a
+pinned verdict means changing a golden in the same commit.</p>
 <p>Every rule that quotes a dollar figure has to cite a source and the date it was
 read.</p>
-<p>Accuracy may not drop. <code>corpus/thresholds.yaml</code> holds the floor for each split.
-A corpus label is never edited to make a test pass. If the tool disagrees with a
-label, the label stands and the case fails.</p>
-<p>Prices go stale. A source older than six months fails the build, so somebody has
-to go and look rather than notice.</p>
-<p>The tool stays offline. It makes no network calls at run time, ever. The one
-dependency the binary carries is a YAML parser, because the rules are community
-edited data and hand rolling a parser for them would be the worse trade.</p>
+<p>A source older than six months fails the build.</p>
+<p><code>corpus/thresholds.yaml</code> holds the accuracy floor for each split, and a run
+below it fails. Individual disagreements are counted and printed rather than
+failed, so the number moves instead of one case breaking the build.</p>
 <p>No em dashes or en dashes anywhere in the repository. <code>go test ./tools/checks</code>
 checks it. Use a comma, colon, period, or parentheses instead.</p>
-<p>The rules ship inside the binary. <code>go:embed</code> puts the YAML in the executable at
-build time, so a build cannot lose its data on the way to another machine.</p>
+<p><code>go:embed</code> puts the rules YAML in the executable, so a build without the rules
+data does not compile.</p>
 <h2>License</h2>
 <p>MIT. See <a href="LICENSE">LICENSE</a>.</p>
 
