@@ -81,7 +81,7 @@ func TestBinaryCarriesItsOwnRules(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	// Running from a directory with no checkout above it is the whole point.
+	// The test runs from a directory with no checkout above it.
 	// The environment is left alone: trimming it to PATH drops SystemRoot,
 	// which Windows needs to start a process at all.
 	command := exec.Command(tool, elsewhere)

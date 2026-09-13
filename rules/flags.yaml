@@ -28,7 +28,7 @@ flags:
       demand: [none]
     text: "Found a Helm chart. It manages releases across a fleet of services, and this repository holds one."
 
-  # Deliberately compose only. A bare Dockerfile is neutral in 2026: managed
+  # Compose only. A bare Dockerfile is neutral in 2026: managed
   # platforms take containers too, so owning one is not evidence of renting a
   # server. A compose file describes a multi service stack you run yourself.
   - id: composed-stack-that-runs-free

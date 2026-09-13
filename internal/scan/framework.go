@@ -293,7 +293,7 @@ var SourceLanguages = []SourceLanguage{
 	// Without this the tool called those "we could not tell what this
 	// repository runs".
 	//
-	// There is deliberately no perl entry beside it. Perl reaches a verdict
+	// There is no perl entry beside it. Perl reaches a verdict
 	// through ServerExecutedSource, which reads what a web server is configured
 	// to run, and a loose .pl file is a script somebody runs by hand.
 	{Language: "sql", Pattern: regexp.MustCompile(`\.sql$`)},

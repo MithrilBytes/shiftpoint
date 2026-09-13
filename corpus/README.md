@@ -3,7 +3,7 @@
 The goldens and the stack tests measure whether a verdict has **changed**. This
 measures whether it is **right**.
 
-That distinction is not academic. Every wrong answer this project has found so
+Every wrong answer this project has found so
 far was found by a person running the tool on a repository and reading the
 output. The test suite, which is large, has never once found one. A corpus
 produces a number instead of a hunch.

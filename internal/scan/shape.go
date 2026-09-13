@@ -15,8 +15,8 @@ var (
 	// repository of shell scripts and Swift files is tooling, and telling its
 	// owner about Lambda pricing would be noise.
 	scriptExtensions = []string{".py", ".js", ".mjs", ".cjs", ".ts", ".rb", ".go"}
-	// Tabular files a repository publishes as its content. Deliberately not
-	// .json or .yaml: those are configuration far more often than they are data.
+	// Tabular files a repository publishes as its content. This excludes
+	// .json and .yaml, which are configuration far more often than they are data.
 	dataExtensions = []string{
 		".csv", ".tsv", ".psv", ".parquet", ".jsonl", ".ndjson", ".arrow", ".feather", ".xls", ".xlsx",
 	}
@@ -188,7 +188,7 @@ func DetectShape(r *Repo) []Signal {
 	// And of the file that packages it. A port in a Dockerfile is the author
 	// saying the process inside listens, which is the plainest statement a
 	// repository makes about being hosted. It is read before the batch runtime
-	// below on purpose: a repository holding both a crawler and the daemon that
+	// below because a repository holding both a crawler and the daemon that
 	// supervises it is the daemon, and the exposed port is which of the two is
 	// the thing you run.
 	if exposed := ExposedPort(r); exposed != "" {
@@ -226,7 +226,7 @@ func DetectShape(r *Repo) []Signal {
 	// calling it a script quoted a free function tier for a file that is never
 	// called from outside the repository.
 	//
-	// Strictly outnumbers, on purpose. One fixture next to one script is a script
+	// Strictly outnumbers. One fixture next to one script is a script
 	// with a fixture, and this should say nothing about it.
 	//
 	// Asked before the manifest below, because whether the data is the point does
@@ -366,8 +366,8 @@ func scheduledWorkflow(r *Repo) string {
 
 // importSurface names the package.json keys that offer other code something to
 // import. "main" is not on this list: npm init writes one into every
-// package.json it creates, so it states nothing. These three are written down
-// on purpose.
+// package.json it creates, so it states nothing. These three are only there
+// when somebody adds them.
 var importSurface = []string{"exports", "types", "typings"}
 
 var consoleScript = regexp.MustCompile(`\[project\.scripts\]|console_scripts`)
@@ -691,7 +691,7 @@ var (
 // called bin.
 //
 // That is the plainest statement a repository can make that what it produces
-// belongs on somebody's PATH. It is deliberately not "has an install target":
+// belongs on somebody's PATH. It is not "has an install target":
 // half the projects on earth have one that installs their dependencies, and
 // where it writes is what separates the two.
 func installsOntoPath(r *Repo) string {

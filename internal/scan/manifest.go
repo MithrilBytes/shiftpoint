@@ -200,7 +200,7 @@ type DependencySource struct {
 // ManifestFiles returns every dependency manifest in the repository, whatever
 // the language.
 //
-// A compose file is deliberately not one of these. It says how to run software
+// A compose file is not one of these. It says how to run software
 // rather than what the software depends on, and DeployedImages leans on the
 // difference to tell a deployment of somebody else's application from an
 // application of this repository's own.

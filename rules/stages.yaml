@@ -14,7 +14,7 @@ updated: "2026-08-04"
 
 # First match wins. Rules run from most specific to least specific.
 #
-# The ladder starts at zero on purpose. For most small repositories the correct
+# The ladder starts at zero. For most small repositories the correct
 # answer is a free tier, and the job of this tool is to say where that free tier
 # ends rather than to sell a server.
 stages:
@@ -46,10 +46,10 @@ stages:
 
   # A machine learning runtime is sized by the model, not by traffic. Quoting a
   # small server price here would be worse than useless, because the cheapest
-  # servers cannot load these libraries at all. This rule deliberately gives no
-  # number rather than a wrong one.
+  # servers cannot load these libraries at all. This rule gives no number
+  # rather than a wrong one.
   #
-  # It asks for model_runtime and not heavy_runtime on purpose. Plenty of things
+  # It asks for model_runtime rather than heavy_runtime. Plenty of things
   # are too heavy for a function tier without being sized by a model: a headless
   # browser rendering PDFs is one, and it wants a server and a price, not a
   # lecture about GPUs. Those fall through to the ordinary rules below.

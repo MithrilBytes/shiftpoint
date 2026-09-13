@@ -133,7 +133,7 @@ func TestTuneAccuracy(t *testing.T) {
 
 func TestHoldoutAccuracy(t *testing.T) {
 	result, bar := score(t, corpus.Holdout)
-	// Holdout stays quiet on purpose. Printing the misses turns the held out
+	// Holdout stays quiet. Printing the misses turns the held out
 	// set into another thing to fit, and then it measures nothing.
 	if os.Getenv("SHIFTPOINT_SHOW_HOLDOUT") == "1" {
 		for _, miss := range result.Misses {
