@@ -65,8 +65,8 @@ func TestSkipsSeparateCheckouts(t *testing.T) {
 	// A worktree or submodule holds a full copy of another repository.
 	root := t.TempDir()
 	mustWrite(t, root, "package.json", `{"dependencies":{"next":"^14"}}`)
-	mustWrite(t, root, ".claude/worktrees/copy/.git", "gitdir: /elsewhere")
-	mustWrite(t, root, ".claude/worktrees/copy/package.json", `{"dependencies":{"next":"^14"}}`)
+	mustWrite(t, root, "worktrees/copy/.git", "gitdir: /elsewhere")
+	mustWrite(t, root, "worktrees/copy/package.json", `{"dependencies":{"next":"^14"}}`)
 
 	repo, err := Open(root)
 	if err != nil {
