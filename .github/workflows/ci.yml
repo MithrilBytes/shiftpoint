@@ -17,6 +17,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+          check-latest: true
           cache: true
       - run: go build ./...
       - run: go vet ./...
@@ -29,6 +30,7 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version: "1.26"
+          check-latest: true
       - name: gofmt
         run: |
           unformatted=$(gofmt -l .)
