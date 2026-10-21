@@ -24,7 +24,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-go@v5
         with:
-          go-version: "1.24"
+          go-version: "1.26"
           cache: true
       # Rebuilt here rather than trusting the committed file, so the page is
       # always generated from the README that is actually on main.
